@@ -150,6 +150,12 @@ test_that("rounds numeric columns, leaves others untouched", {
   expect_identical(out$flag, df$flag)  # logical is not numeric; untouched
 })
 
+test_that("digits defaults to 3", {
+  df <- data.frame(est = c(1.23456, 2.34567))
+  out <- round_cols(df)
+  expect_equal(out$est, c(1.235, 2.346))
+})
+
 test_that("min is applied to numeric columns", {
   df <- data.frame(p = c(0.00001, 0.04321), est = c(5.5555, -0.0002))
   out <- round_cols(df, digits = 3, min = 0.001)
