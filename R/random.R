@@ -44,5 +44,5 @@ rbernoulli <- function(n, prob) {
     'prob must be between 0 and 1'      = all(prob >= 0 & prob <= 1)
   )
 
-  rbinom(n = n, size = 1, prob = prob)
+  stats::rbinom(n = n, size = 1, prob = prob)
 }
