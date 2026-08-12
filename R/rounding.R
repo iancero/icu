@@ -39,3 +39,70 @@ round_to_nearest <- function(x, unit, round_func = round) {
 
   round_func(x / unit) * unit
 }
+
+
+#' Round with a minimum magnitude
+#'
+#' Rounds like [round()], but values whose rounded magnitude would fall
+#' below `min` are clamped to `min` instead (keeping their sign). The
+#' motivating case is p-values: with `digits = 3` and `min = 0.001`, a
+#' p-value of 0.00001 returns 0.001 rather than 0.
+#'
+#' @param x A numeric vector to round.
+#' @param digits A single whole number: decimal places to round to,
+#'   passed to [round()].
+#' @param min A single positive, finite number: the smallest magnitude
+#'   the result may have. Applies symmetrically to negative values,
+#'   using the sign of the original (pre-rounding) value.
+#'
+#' @details
+#' Exact zeros in `x` are set to `min`, with a warning (suppressable via
+#' [suppressWarnings()]). If your data contains meaningful zeros, this
+#' function is probably not what you want.
+#'
+#' The clamp applies to any value whose rounded magnitude is below `min`,
+#' not only values that round to zero: `round_with_min(0.004, 3, 0.01)`
+#' returns 0.01.
+#'
+#' `NA` and `NaN` propagate unchanged; `Inf` and `-Inf` pass through
+#' untouched.
+#'
+#' Note that the numeric result 0.001 overstates a p-value of 0.00001;
+#' for manuscript tables the string `"<0.001"` is usually the right
+#' presentation. This function is for numeric pipelines, not display.
+#'
+#' @return A numeric vector the same length as `x`.
+#'
+#' @examples
+#' round_with_min(c(0.032, 0.00001), digits = 3, min = 0.001)
+#' round_with_min(-0.0004, digits = 3, min = 0.001)  # sign preserved
+#'
+#' @export
+round_with_min <- function(x, digits, min) {
+
+  stopifnot(
+    'x must be numeric'             = is.numeric(x),
+    'digits must be length 1'       = length(digits) == 1,
+    'digits must be a whole number' = is.numeric(digits) && is.finite(digits) && digits == trunc(digits),
+    'min must be length 1'          = length(min) == 1,
+    'min must be numeric'           = is.numeric(min),
+    'min must be finite'            = is.finite(min),
+    'min must be greater than 0'    = min > 0
+  )
+
+  out <- round(x, digits)
+
+  # Nonzero values whose rounded magnitude falls below min:
+  # clamp to min, keeping the sign of the *original* value
+  clamp <- !is.na(x) & is.finite(x) & x != 0 & abs(out) < min
+  out[clamp] <- sign(x[clamp]) * min
+
+  # Exact zeros become min, with a warning
+  zeros <- !is.na(x) & x == 0
+  if (any(zeros)) {
+    warning('x contains exact zeros; these were set to min')
+    out[zeros] <- min
+  }
+
+  out
+}

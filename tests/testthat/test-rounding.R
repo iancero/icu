@@ -50,3 +50,83 @@ test_that("invalid unit is rejected", {
   expect_error(round_to_nearest(1, 0),       "unit must be greater than 0")
   expect_error(round_to_nearest(1, -2),      "unit must be greater than 0")
 })
+
+
+# --- round_with_min: correctness --------------------------------------------
+
+test_that("rounds normally when min does not bind", {
+  expect_equal(round_with_min(0.032, 3, 0.001), 0.032)
+  expect_equal(round_with_min(c(0.25, 1.5, 10), 1, 0.1), c(0.2, 1.5, 10))
+})
+
+test_that("values below min are clamped to min", {
+  expect_equal(round_with_min(0.00001, 3, 0.001), 0.001)
+  expect_equal(round_with_min(0.0004, 3, 0.001), 0.001)  # rounds to 0, rescued
+  expect_equal(round_with_min(0.004, 3, 0.01), 0.01)     # rounds nonzero, still below min
+})
+
+test_that("values that round to exactly min are untouched", {
+  expect_equal(round_with_min(0.0012, 3, 0.001), 0.001)
+})
+
+test_that("negative values are clamped symmetrically", {
+  expect_equal(round_with_min(-0.00001, 3, 0.001), -0.001)
+  expect_equal(round_with_min(-0.032, 3, 0.001), -0.032)
+})
+
+test_that("sign comes from the original value, not the rounded one", {
+  # -0.0004 rounds to 0 (sign lost); original sign must be rescued
+  expect_equal(round_with_min(-0.0004, 3, 0.001), -0.001)
+})
+
+test_that("mixed vectors clamp element-wise", {
+  x <- c(0.5, 0.00002, -0.00002, 0.032)
+  expect_equal(round_with_min(x, 3, 0.001), c(0.5, 0.001, -0.001, 0.032))
+})
+
+# --- round_with_min: zeros and special values -------------------------------
+
+test_that("exact zeros become min with a warning", {
+  expect_warning(out <- round_with_min(0, 3, 0.001), "exact zeros")
+  expect_equal(out, 0.001)
+})
+
+test_that("zero warning fires once for multiple zeros", {
+  expect_warning(out <- round_with_min(c(0, 1, 0), 2, 0.01), "exact zeros")
+  expect_equal(out, c(0.01, 1, 0.01))
+})
+
+test_that("zero warning is suppressable", {
+  expect_no_warning(out <- suppressWarnings(round_with_min(0, 3, 0.001)))
+  expect_equal(out, 0.001)
+})
+
+test_that("NA, NaN, and Inf pass through", {
+  expect_equal(round_with_min(c(NA, NaN, Inf, -Inf), 3, 0.001),
+               c(NA, NaN, Inf, -Inf))
+})
+
+test_that("zero-length input returns zero-length output", {
+  expect_equal(round_with_min(numeric(0), 3, 0.001), numeric(0))
+})
+
+# --- round_with_min: input validation ---------------------------------------
+
+test_that("invalid x is rejected", {
+  expect_error(round_with_min("5", 3, 0.001), "x must be numeric")
+})
+
+test_that("invalid digits is rejected", {
+  expect_error(round_with_min(1, c(2, 3), 0.001), "digits must be length 1")
+  expect_error(round_with_min(1, 2.5, 0.001),     "digits must be a whole number")
+  expect_error(round_with_min(1, "3", 0.001),     "digits must be a whole number")
+})
+
+test_that("invalid min is rejected", {
+  expect_error(round_with_min(1, 3, c(0.001, 0.01)), "min must be length 1")
+  expect_error(round_with_min(1, 3, "0.001"),        "min must be numeric")
+  expect_error(round_with_min(1, 3, NA_real_),       "min must be finite")
+  expect_error(round_with_min(1, 3, Inf),            "min must be finite")
+  expect_error(round_with_min(1, 3, 0),              "min must be greater than 0")
+  expect_error(round_with_min(1, 3, -0.001),         "min must be greater than 0")
+})
