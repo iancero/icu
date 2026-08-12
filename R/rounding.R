@@ -51,14 +51,17 @@ round_to_nearest <- function(x, unit, round_func = round) {
 #' @param x A numeric vector to round.
 #' @param digits A single whole number: decimal places to round to,
 #'   passed to [round()].
-#' @param min A single positive, finite number: the smallest magnitude
+#' @param min A single non-negative, finite number: the smallest magnitude
 #'   the result may have. Applies symmetrically to negative values,
-#'   using the sign of the original (pre-rounding) value.
+#'   using the sign of the original (pre-rounding) value. `min = 0`
+#'   disables the minimum entirely, making the function equivalent
+#'   to [round()].
 #'
 #' @details
 #' Exact zeros in `x` are set to `min`, with a warning (suppressable via
 #' [suppressWarnings()]). If your data contains meaningful zeros, this
-#' function is probably not what you want.
+#' function is probably not what you want. (With `min = 0`, zeros are
+#' left alone and no warning is issued.)
 #'
 #' The clamp applies to any value whose rounded magnitude is below `min`,
 #' not only values that round to zero: `round_with_min(0.004, 3, 0.01)`
@@ -87,7 +90,7 @@ round_with_min <- function(x, digits, min) {
     'min must be length 1'          = length(min) == 1,
     'min must be numeric'           = is.numeric(min),
     'min must be finite'            = is.finite(min),
-    'min must be greater than 0'    = min > 0
+    'min must be non-negative'      = min >= 0
   )
 
   out <- round(x, digits)
@@ -97,12 +100,68 @@ round_with_min <- function(x, digits, min) {
   clamp <- !is.na(x) & is.finite(x) & x != 0 & abs(out) < min
   out[clamp] <- sign(x[clamp]) * min
 
-  # Exact zeros become min, with a warning
+  # Exact zeros become min, with a warning (unless min = 0: nothing to do)
   zeros <- !is.na(x) & x == 0
-  if (any(zeros)) {
+  if (min > 0 && any(zeros)) {
     warning('x contains exact zeros; these were set to min')
     out[zeros] <- min
   }
 
   out
+}
+
+
+#' Round the numeric columns of a data frame
+#'
+#' Applies [round_with_min()] to every numeric column of a data frame,
+#' leaving all other columns untouched. A convenience for making model
+#' output and summary tables readable at a glance.
+#'
+#' @param df A data frame (or tibble).
+#' @param digits A single whole number: decimal places to round to.
+#' @param min A single non-negative, finite number: the smallest magnitude
+#'   any rounded value may have (see [round_with_min()]). The default
+#'   `min = 0` means plain rounding.
+#'
+#' @details
+#' With `min > 0`, the minimum applies to *every* numeric column, and any
+#' column containing exact zeros will have them set to `min`, with one
+#' warning per such column. If some columns have meaningful zeros (counts,
+#' differences), round those separately rather than raising `min` here.
+#'
+#' Integer columns are numeric and so are processed; if `min` binds on
+#' one, the affected column is converted to double.
+#'
+#' @return The data frame with numeric columns rounded, otherwise
+#'   unchanged (same class, same column order).
+#'
+#' @examples
+#' df <- data.frame(
+#'   term = c("age", "sex"),
+#'   estimate = c(1.23456, -0.98765),
+#'   p_value = c(0.00001, 0.04321)
+#' )
+#' round_cols(df, digits = 3)
+#' round_cols(df, digits = 3, min = 0.001)
+#'
+#' @export
+round_cols <- function(df, digits, min = 0) {
+
+  stopifnot(
+    'df must be a data frame'       = is.data.frame(df),
+    'digits must be length 1'       = length(digits) == 1,
+    'digits must be a whole number' = is.numeric(digits) && is.finite(digits) && digits == trunc(digits),
+    'min must be length 1'          = length(min) == 1,
+    'min must be numeric'           = is.numeric(min),
+    'min must be finite'            = is.finite(min),
+    'min must be non-negative'      = min >= 0
+  )
+
+  df |>
+    dplyr::mutate(
+      dplyr::across(
+        tidyselect::where(is.numeric),
+        .fns = ~ round_with_min(.x, digits = digits, min = min)
+    )
+  )
 }

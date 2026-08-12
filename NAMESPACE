@@ -2,6 +2,7 @@
 
 export(clean_names)
 export(rbernoulli)
+export(round_cols)
 export(round_to_nearest)
 export(round_with_min)
 importFrom(janitor,clean_names)

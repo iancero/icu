@@ -84,6 +84,12 @@ test_that("mixed vectors clamp element-wise", {
   expect_equal(round_with_min(x, 3, 0.001), c(0.5, 0.001, -0.001, 0.032))
 })
 
+test_that("min = 0 is equivalent to plain round()", {
+  x <- c(0.0004, -0.0004, 0, 0.032, NA, Inf)
+  expect_no_warning(out <- round_with_min(x, 3, min = 0))
+  expect_equal(out, round(x, 3))
+})
+
 # --- round_with_min: zeros and special values -------------------------------
 
 test_that("exact zeros become min with a warning", {
@@ -127,6 +133,67 @@ test_that("invalid min is rejected", {
   expect_error(round_with_min(1, 3, "0.001"),        "min must be numeric")
   expect_error(round_with_min(1, 3, NA_real_),       "min must be finite")
   expect_error(round_with_min(1, 3, Inf),            "min must be finite")
-  expect_error(round_with_min(1, 3, 0),              "min must be greater than 0")
-  expect_error(round_with_min(1, 3, -0.001),         "min must be greater than 0")
+  expect_error(round_with_min(1, 3, -0.001),         "min must be non-negative")
+})
+
+
+
+test_that("rounds numeric columns, leaves others untouched", {
+  df <- data.frame(
+    term = c("a", "b"),
+    est  = c(1.23456, 2.34567),
+    flag = c(TRUE, FALSE)
+  )
+  out <- round_cols(df, digits = 2)
+  expect_equal(out$est, c(1.23, 2.35))
+  expect_identical(out$term, df$term)
+  expect_identical(out$flag, df$flag)  # logical is not numeric; untouched
+})
+
+test_that("min is applied to numeric columns", {
+  df <- data.frame(p = c(0.00001, 0.04321), est = c(5.5555, -0.0002))
+  out <- round_cols(df, digits = 3, min = 0.001)
+  expect_equal(out$p, c(0.001, 0.043))
+  expect_equal(out$est, c(5.556, -0.001))  # symmetric min, sign preserved
+})
+
+test_that("default min = 0 is plain rounding", {
+  df <- data.frame(x = c(0.0004, 0))
+  expect_no_warning(out <- round_cols(df, digits = 3))
+  expect_equal(out$x, c(0, 0))
+})
+
+test_that("zeros with min > 0 warn", {
+  df <- data.frame(a = c(0, 1), b = c(2, 0))
+  expect_warning(out <- round_cols(df, 2, min = 0.01), "exact zeros")
+  expect_equal(out$a, c(0.01, 1))
+  expect_equal(out$b, c(2, 0.01))
+})
+
+test_that("data frame with no numeric columns passes through", {
+  df <- data.frame(a = c("x", "y"), b = factor(c("u", "v")))
+  expect_identical(round_cols(df, 3), df)
+})
+
+test_that("tibbles stay tibbles and grouping is preserved", {
+  skip_if_not_installed("tibble")
+  tb <- dplyr::group_by(tibble::tibble(g = c("a", "b"), x = c(1.234, 5.678)), g)
+  out <- round_cols(tb, 1)
+  expect_s3_class(out, "tbl_df")
+  expect_identical(dplyr::group_vars(out), "g")
+  expect_equal(out$x, c(1.2, 5.7))
+})
+
+test_that("NA in data propagates", {
+  df <- data.frame(x = c(1.234, NA))
+  expect_equal(round_cols(df, 1)$x, c(1.2, NA))
+})
+
+test_that("invalid inputs are rejected", {
+  df <- data.frame(x = 1.5)
+  expect_error(round_cols("not a df", 3),  "df must be a data frame")
+  expect_error(round_cols(df, c(1, 2)),    "digits must be length 1")
+  expect_error(round_cols(df, 2.5),        "digits must be a whole number")
+  expect_error(round_cols(df, 3, min = -1),        "min must be non-negative")
+  expect_error(round_cols(df, 3, min = c(.1, .2)), "min must be length 1")
 })

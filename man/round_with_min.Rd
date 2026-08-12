@@ -12,9 +12,11 @@ round_with_min(x, digits, min)
 \item{digits}{A single whole number: decimal places to round to,
 passed to \code{\link[=round]{round()}}.}
 
-\item{min}{A single positive, finite number: the smallest magnitude
+\item{min}{A single non-negative, finite number: the smallest magnitude
 the result may have. Applies symmetrically to negative values,
-using the sign of the original (pre-rounding) value.}
+using the sign of the original (pre-rounding) value. \code{min = 0}
+disables the minimum entirely, making the function equivalent
+to \code{\link[=round]{round()}}.}
 }
 \value{
 A numeric vector the same length as \code{x}.
@@ -28,7 +30,8 @@ p-value of 0.00001 returns 0.001 rather than 0.
 \details{
 Exact zeros in \code{x} are set to \code{min}, with a warning (suppressable via
 \code{\link[=suppressWarnings]{suppressWarnings()}}). If your data contains meaningful zeros, this
-function is probably not what you want.
+function is probably not what you want. (With \code{min = 0}, zeros are
+left alone and no warning is issued.)
 
 The clamp applies to any value whose rounded magnitude is below \code{min},
 not only values that round to zero: \code{round_with_min(0.004, 3, 0.01)}
