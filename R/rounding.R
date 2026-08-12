@@ -119,6 +119,7 @@ round_with_min <- function(x, digits, min) {
 #'
 #' @param df A data frame (or tibble).
 #' @param digits A single whole number: decimal places to round to.
+#'   Defaults to 3.
 #' @param min A single non-negative, finite number: the smallest magnitude
 #'   any rounded value may have (see [round_with_min()]). The default
 #'   `min = 0` means plain rounding.
@@ -145,7 +146,7 @@ round_with_min <- function(x, digits, min) {
 #' round_cols(df, digits = 3, min = 0.001)
 #'
 #' @export
-round_cols <- function(df, digits, min = 0) {
+round_cols <- function(df, digits = 3, min = 0) {
 
   stopifnot(
     'df must be a data frame'       = is.data.frame(df),

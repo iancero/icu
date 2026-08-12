@@ -4,12 +4,13 @@
 \alias{round_cols}
 \title{Round the numeric columns of a data frame}
 \usage{
-round_cols(df, digits, min = 0)
+round_cols(df, digits = 3, min = 0)
 }
 \arguments{
 \item{df}{A data frame (or tibble).}
 
-\item{digits}{A single whole number: decimal places to round to.}
+\item{digits}{A single whole number: decimal places to round to.
+Defaults to 3.}
 
 \item{min}{A single non-negative, finite number: the smallest magnitude
 any rounded value may have (see \code{\link[=round_with_min]{round_with_min()}}). The default
