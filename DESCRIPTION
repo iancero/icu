@@ -1,5 +1,5 @@
 Package: icu
-Title: What the Package Does (One Line, Title Case)
+Title: Miscellaneous Utilities for Everyday Data Analysis
 Version: 0.0.0.9000
 Authors@R: 
     person("Ian", "Cero", , "ianjcero@gmail.com", role = c("aut", "cre"))
