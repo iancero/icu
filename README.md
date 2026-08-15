@@ -1,7 +1,7 @@
 
 <!-- README.md is generated from README.Rmd. Please edit that file -->
 
-# ICU - Ian Cero’s utils
+# ICU - Ian Cero’s Utils
 
 <!-- badges: start -->
 
@@ -13,8 +13,7 @@ packages or which are convenient to re-export all in one place.
 
 ## Installation
 
-You can install the development version of **ICU** from
-[GitHub](https://github.com/) with:
+You can install the development version of **ICU** from with:
 
 ``` r
 # install.packages("pak")
