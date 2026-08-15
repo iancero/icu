@@ -4,6 +4,7 @@
 \name{reexports}
 \alias{reexports}
 \alias{clean_names}
+\alias{glue}
 \title{Objects exported from other packages}
 \keyword{internal}
 \description{
@@ -11,6 +12,8 @@ These objects are imported from other packages. Follow the links
 below to see their documentation.
 
 \describe{
+  \item{glue}{\code{\link[glue:glue]{glue()}}}
+
   \item{janitor}{\code{\link[janitor:clean_names]{clean_names()}}}
 }}
 

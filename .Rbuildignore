@@ -3,3 +3,5 @@
 ^LICENSE\.md$
 ^practice\.qmd$
 ^README\.Rmd$
+^dev$
+^CLAUDE\.md$
