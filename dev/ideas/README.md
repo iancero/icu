@@ -16,4 +16,5 @@ Backlog of function ideas for icu, one markdown file per idea. This folder is
 **Current ordering constraint:** qmd-creator.md → project-scaffold.md.
 dated-path is **shipped** (`dated_path()`); the two downstream items call it
 for file-name assembly, but it carries no versioning logic, so each owns its
-own version handling. round-cols-default.md is independent and can go anytime.
+own version handling. round-cols-default is **shipped** (`round_cols()` now
+defaults to `digits = 3, min = 0`); it was independent of the other three.
