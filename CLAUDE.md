@@ -50,6 +50,10 @@ Flat package: one topic file per area in [R/](R/), with a matching `tests/testth
 
 **Test file structure** uses `# --- Section ---` comment banners: correctness, edge cases / special values, then input validation.
 
+**Editor side effects go through `rstudio_available()`** (internal, [R/document.R](R/document.R)). Never inline `rstudioapi::isAvailable()`: it returns `TRUE` when `devtools::test()` runs inside RStudio, so a test would take the editor branch for real — `meeting()` would insert a block into whatever file is open. Tests mock that one binding with `testthat::local_mocked_bindings()` (hence `testthat (>= 3.2.0)`).
+
+**Roxygen markdown eats `[ ]`.** A literal bracket pair anywhere in a roxygen block — including inside a fenced code block — is parsed as a markdown reference link and leaves junk like `[ ]: R:%20` in the generated `.Rd`. Show such content with `\preformatted{}` instead of a fence, and keep bracket pairs out of the prose. Relevant to anything documenting markdown or checkbox syntax.
+
 **Always use `pkg::fn()` prefixes** for anything outside base R (`stats::rbinom()`, `dplyr::mutate()`, `tidyselect::where()`). A prior commit existed solely to fix `R CMD check` warnings from missing prefixes.
 
 **Re-export pattern** ([R/reexports.R](R/reexports.R)): add the package to `Imports` via `usethis::use_package()`, then

@@ -135,7 +135,7 @@ new_main <- function(stem = 'main', path = '.', open = TRUE) {
   # Editor side effects, kept thin and isolated at the end: everything above is
   # testable, this is not
   if (open) {
-    if (requireNamespace('rstudioapi', quietly = TRUE) && rstudioapi::isAvailable()) {
+    if (rstudio_available()) {
       rstudioapi::navigateToFile(target)
     } else {
       utils::file.edit(target)
@@ -143,4 +143,148 @@ new_main <- function(stem = 'main', path = '.', open = TRUE) {
   }
 
   invisible(target)
+}
+
+
+#' Insert a meeting-log entry at the cursor
+#'
+#' Writes the house meeting-log block -- date-stamped header, Attendees,
+#' Notes, and a Requests checklist -- into the current document at the
+#' cursor, ready to type into while the meeting is happening.
+#'
+#' @param label An optional single, non-empty, non-`NA` character string:
+#'   a short name for the meeting, appended to the header after the date.
+#'   Omitted by default.
+#'
+#' @details
+#' The block is:
+#'
+#' \preformatted{## Meeting - 2026-08-23
+#'
+#' **Attendees:**
+#'
+#' **Notes:**
+#'
+#'
+#'
+#' **Requests:**
+#'
+#' - [ ]
+#' - [ ]
+#' }
+#'
+#' with `meeting('manuscript feedback')` giving
+#' `## Meeting - 2026-08-23 - manuscript feedback`.
+#'
+#' Entries are identified by date, not by a meeting number, in the same
+#' `%Y-%m-%d` format [dated_path()] stamps files with -- so a log entry and
+#' the output that came out of that meeting sort and grep together. The
+#' fill-in lines carry a trailing space, which is where the cursor wants to
+#' be.
+#'
+#' Only three sections, deliberately. Decisions folded into Notes, because
+#' in practice a decision is just a note worth writing down. Deliverables
+#' folded into Requests, because they are the same checklist seen from two
+#' sides. The requests are checkboxes rather than bullets, so they carry
+#' state: tick them as the work lands, and the top of the document always
+#' shows what is still outstanding -- which is also what makes the log
+#' usable as project memory, by you or by an AI session reading the source.
+#'
+#' @section Where it lands:
+#' At the cursor, via [rstudioapi::insertText()]. Putting the cursor at the
+#' end of the log is your job. That is deliberate: the alternative is
+#' parsing the document to find the end of the meeting log, which is
+#' fragile in exactly the way a mid-meeting tool must not be, and you are
+#' already clicking where the entry goes.
+#'
+#' Outside RStudio there is nothing to insert into, so the block is
+#' printed instead, ready to paste. A meeting should never start with an
+#' error message.
+#'
+#' @return The block text, invisibly. Invisible because the function has
+#'   already delivered it -- into the document, or to `stdout` -- so a
+#'   visible return would print it a second time.
+#'
+#' @examples
+#' # Outside RStudio the block is printed, ready to paste. Inside RStudio it
+#' # is inserted into the current document at the cursor instead.
+#' meeting()
+#'
+#' # An optional label lands after the date
+#' meeting('manuscript feedback')
+#'
+#' @export
+meeting <- function(label = NULL) {
+
+  # Validation lives in meeting_block(), the one place that reads `label`;
+  # the message reaches the caller from here unchanged
+  block <- meeting_block(label)
+
+  # Editor side effects, kept thin and isolated, as in new_main()
+  if (rstudio_available()) {
+    rstudioapi::insertText(text = block)
+
+    return(invisible(block))
+  }
+
+  # Nothing to insert into: print it, so the block is always available to
+  # paste rather than lost to an error
+  cat(block)
+
+  invisible(block)
+}
+
+
+# --- Internals --------------------------------------------------------------
+
+# The one producer of the meeting block. Split out from meeting() for
+# testability, not for sharing: the string assembly deserves exact tests and
+# the insert-or-print step around it cannot have any. There is no second
+# consumer by design -- the document template is fully static, and the
+# creation day's date is precisely what a static file cannot carry.
+meeting_block <- function(label = NULL) {
+
+  stopifnot(
+    'label must be length 1'  = is.null(label) || length(label) == 1,
+    'label must be character' = is.null(label) || is.character(label),
+    'label must not be NA'    = is.null(label) || !is.na(label),
+    'label must not be empty' = is.null(label) || nzchar(label)
+  )
+
+  header <- paste0('## Meeting - ', format(Sys.Date(), '%Y-%m-%d'))
+
+  if (!is.null(label)) {
+    header <- paste0(header, ' - ', label)
+  }
+
+  # The trailing spaces are deliberate: they leave the cursor one space past
+  # the label, so clicking into the line puts you where you type. The three
+  # blank lines under Notes are room to write in, not an accident.
+  lines <- c(
+    header,
+    '',
+    '**Attendees:** ',
+    '',
+    '**Notes:**',
+    '',
+    '',
+    '',
+    '**Requests:**',
+    '',
+    '- [ ] ',
+    '- [ ] '
+  )
+
+  paste0(paste(lines, collapse = '\n'), '\n')
+}
+
+
+# Whether there is an RStudio session to talk to. One function rather than the
+# check written twice, and -- since it is a binding in this namespace -- the
+# seam the tests mock to exercise the no-RStudio path. That matters more than
+# it sounds: devtools::test() run inside RStudio would otherwise take the
+# editor branch and insert a meeting block into whatever file happens to be
+# open.
+rstudio_available <- function() {
+  requireNamespace('rstudioapi', quietly = TRUE) && rstudioapi::isAvailable()
 }

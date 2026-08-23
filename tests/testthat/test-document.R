@@ -398,3 +398,194 @@ test_that("nothing is created when validation fails", {
 
   expect_length(list.files(dir), 0)
 })
+
+
+# --- meeting(): how these tests are set up ---------------------------------
+
+# meeting_block() carries the real tests -- it is a pure string function, so
+# it needs no temp dir and no editor. meeting() is a thin insert-or-print
+# wrapper around it.
+#
+# Every test that calls meeting() itself mocks rstudio_available() first, and
+# must: devtools::test() run from inside RStudio would otherwise take the
+# editor branch for real and insert a meeting block into whatever file
+# happens to be open.
+#
+# `today` is defined at the top of this file, recomputed rather than
+# hard-coded, since the header comes from the clock.
+
+# --- meeting_block(): the block text ----------------------------------------
+
+test_that("the block is exactly the house boilerplate", {
+  # The whole content contract, in one assertion. The trailing spaces on the
+  # fill-in lines are deliberate -- they leave the cursor where you type.
+  expect_identical(
+    meeting_block(),
+    paste0(
+      "## Meeting - ", today, "\n",
+      "\n",
+      "**Attendees:** \n",
+      "\n",
+      "**Notes:**\n",
+      "\n",
+      "\n",
+      "\n",
+      "**Requests:**\n",
+      "\n",
+      "- [ ] \n",
+      "- [ ] \n"
+    )
+  )
+})
+
+test_that("the header is dated, not numbered", {
+  lines <- strsplit(meeting_block(), "\n")[[1]]
+
+  # Date identifies the entry; the format matches dated_path()'s, so a log
+  # entry and the files that meeting produced sort and grep together
+  expect_identical(lines[[1]], paste0("## Meeting - ", today))
+  expect_match(lines[[1]], "^## Meeting - \\d{4}-\\d{2}-\\d{2}$")
+})
+
+test_that("a label is appended after the date", {
+  lines <- strsplit(meeting_block("manuscript feedback"), "\n")[[1]]
+
+  expect_identical(
+    lines[[1]],
+    paste0("## Meeting - ", today, " - manuscript feedback")
+  )
+})
+
+test_that("a label changes the header and nothing else", {
+  plain     <- strsplit(meeting_block(), "\n")[[1]]
+  labelled  <- strsplit(meeting_block("kickoff"), "\n")[[1]]
+
+  expect_identical(labelled[-1], plain[-1])
+})
+
+test_that("the block carries three sections, in order", {
+  lines <- strsplit(meeting_block(), "\n")[[1]]
+
+  expect_identical(
+    grep("^\\*\\*", lines, value = TRUE),
+    c("**Attendees:** ", "**Notes:**", "**Requests:**")
+  )
+})
+
+test_that("Decisions and Deliverables are deliberately absent", {
+  # Decisions folded into Notes, Deliverables into Requests -- pinned so the
+  # folding is not quietly undone
+  block <- meeting_block()
+
+  expect_no_match(block, "Decisions")
+  expect_no_match(block, "Deliverables")
+})
+
+test_that("requests are two empty, unticked checkboxes", {
+  lines <- strsplit(meeting_block(), "\n")[[1]]
+
+  # Checkboxes rather than bullets: they carry state, so the top of the
+  # document always shows what is still outstanding
+  expect_identical(grep("^- \\[", lines, value = TRUE), c("- [ ] ", "- [ ] "))
+  expect_no_match(meeting_block(), "[x]", fixed = TRUE)
+})
+
+test_that("there is room to type under Notes", {
+  lines <- strsplit(meeting_block(), "\n")[[1]]
+
+  notes    <- which(lines == "**Notes:**")
+  requests <- which(lines == "**Requests:**")
+
+  expect_identical(lines[(notes + 1):(requests - 1)], c("", "", ""))
+})
+
+test_that("the block ends with a newline", {
+  # So the cursor lands on a fresh line after an insert, and a cat() of it
+  # returns the console prompt cleanly
+  expect_match(meeting_block(), "\n$")
+})
+
+# --- meeting(): insert or print ---------------------------------------------
+
+test_that("with no RStudio session the block is printed", {
+  local_mocked_bindings(rstudio_available = function() FALSE)
+
+  # Never empty-handed mid-meeting: with nothing to insert into, the block
+  # goes to stdout to be pasted
+  expect_output(meeting(), "## Meeting - ", fixed = TRUE)
+})
+
+test_that("what is printed is exactly the block", {
+  local_mocked_bindings(rstudio_available = function() FALSE)
+
+  printed <- capture.output(meeting())
+
+  expect_identical(paste0(paste(printed, collapse = "\n"), "\n"), meeting_block())
+})
+
+test_that("the block is returned invisibly, and reported exactly once", {
+  local_mocked_bindings(rstudio_available = function() FALSE)
+
+  capture.output(returned <- withVisible(meeting()))
+
+  # Already delivered, so a visible return would print it a second time in
+  # any context that auto-prints
+  expect_false(returned$visible)
+  expect_identical(returned$value, meeting_block())
+})
+
+test_that("a label reaches the block through meeting()", {
+  local_mocked_bindings(rstudio_available = function() FALSE)
+
+  capture.output(returned <- meeting("kickoff"))
+
+  expect_identical(returned, meeting_block("kickoff"))
+})
+
+test_that("with an RStudio session the block is inserted, not printed", {
+  skip_if_not_installed("rstudioapi")
+
+  inserted <- NULL
+
+  local_mocked_bindings(rstudio_available = function() TRUE)
+  local_mocked_bindings(
+    insertText = function(...) {
+      args <- list(...)
+      inserted <<- args$text
+      invisible(NULL)
+    },
+    .package = "rstudioapi"
+  )
+
+  expect_silent(returned <- meeting())
+
+  expect_identical(inserted, meeting_block())
+  expect_identical(returned, meeting_block())
+})
+
+# --- meeting(): input validation --------------------------------------------
+
+test_that("invalid label is rejected", {
+  expect_error(meeting_block(c("a", "b")), "label must be length 1")
+  expect_error(meeting_block(character(0)), "label must be length 1")
+  expect_error(meeting_block(1), "label must be character")
+  expect_error(meeting_block(NA_character_), "label must not be NA")
+  expect_error(meeting_block(""), "label must not be empty")
+})
+
+test_that("validation reaches the caller through meeting()", {
+  # meeting() delegates to meeting_block() rather than repeating the checks,
+  # so the messages must still surface from the exported function
+  local_mocked_bindings(rstudio_available = function() FALSE)
+
+  expect_error(meeting(c("a", "b")), "label must be length 1")
+  expect_error(meeting(1), "label must be character")
+  expect_error(meeting(NA_character_), "label must not be NA")
+  expect_error(meeting(""), "label must not be empty")
+})
+
+test_that("no label is the default, and is not an error", {
+  expect_no_error(meeting_block())
+  expect_no_error(meeting_block(NULL))
+  expect_identical(meeting_block(NULL), meeting_block())
+})

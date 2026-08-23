@@ -24,7 +24,7 @@ own version handling. round-cols-default is **shipped** (`round_cols()` now
 defaults to `digits = 3, min = 0`); it was independent of the other three.
 **Current ordering constraint (2026-08-23):**
 
-Implementation wave, in order. Step 1 is done:
+Implementation wave, in order. Steps 1 and 2 are done:
 
 1. ~~**new-main.md** (new_main())~~ — **shipped 2026-08-23** (see done/).
    Its version probe pinned the `{stem}[_vN]_{date}[_HH-MM-SS].{ext}`
@@ -33,8 +33,12 @@ Implementation wave, in order. Step 1 is done:
    it. The template is installed at inst/templates/main.qmd — that file
    IS the function's output, so content changes are template edits, no R
    code involved.
-2. **meeting.md** (meeting() + internal meeting_block()) — independent of
-   new_main; any time, but early, since the kickoff ritual needs it.
+2. ~~**meeting.md** (meeting() + internal meeting_block())~~ — **shipped
+   2026-08-23** (see done/). Lives in R/document.R beside `new_main()`.
+   Note the seam it introduced: the RStudio check is now an internal
+   `rstudio_available()`, which both functions share and the tests mock —
+   `rstudioapi::isAvailable()` is TRUE when the suite runs inside RStudio,
+   so anything with an editor side effect must go through it.
 3. **conventions-md.md** (conventions_md()) — independent; any time before
    new_project().
 4. **project-scaffold.md** (new_project()) — last of the wave; orchestrates
@@ -49,6 +53,6 @@ Deliberately backlog, not in the wave: **codebook-md.md**, then
 the data).
 
 Shipped: dated-path (`dated_path()` + shorthands), round-cols-default
-(`digits = 3`), new-main (`new_main()` + internal `parse_dated_filename()`)
-— see done/. Superseded: qmd-creator.md was replaced wholesale by
+(`digits = 3`), new-main (`new_main()` + internal `parse_dated_filename()`),
+meeting (`meeting()` + internal `meeting_block()`) — see done/. Superseded: qmd-creator.md was replaced wholesale by
 new-main.md (2026-08-23) and is gone.
