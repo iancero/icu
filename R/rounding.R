@@ -142,7 +142,8 @@ round_with_min <- function(x, digits, min) {
 #'   estimate = c(1.23456, -0.98765),
 #'   p_value = c(0.00001, 0.04321)
 #' )
-#' round_cols(df, digits = 3)
+#' round_cols(df)                           # digits defaults to 3
+#' round_cols(df, digits = 2)
 #' round_cols(df, digits = 3, min = 0.001)
 #'
 #' @export
