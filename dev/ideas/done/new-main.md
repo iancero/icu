@@ -1,16 +1,66 @@
 # new_main() — scaffold the house analysis document
 
-**Status:** design resolved (2026-08-23) — ready to implement. Supersedes
-qmd-creator.md (delete that file; this one carries all its resolutions plus
-the naming, `open` argument, and meeting-block decisions made after it was
-drafted).
-**Proposed file:** R/main.R (working; or alongside paths.R family — decide
-at implementation)
-**Depends on:** `dated_path()` (shipped) for name assembly. `new_project()`
-(see project-scaffold.md) calls this to seed new projects. No longer depends
-on meeting()/meeting_block(): the template ships with an EMPTY Project
+**Status:** shipped as `new_main()` in R/document.R (tests in
+tests/testthat/test-document.R); template installed at inst/templates/main.qmd;
+the shared filename parser landed as internal `parse_dated_filename()` in
+R/paths.R (grammar tests in tests/testthat/test-paths.R). Superseded
+qmd-creator.md, which is gone.
+**Depended on:** `dated_path()` (shipped) for name assembly. `new_project()`
+(see project-scaffold.md) calls this to seed new projects. Did not depend on
+meeting()/meeting_block(): the template ships with an EMPTY Project
 Background, and `meeting()` is the sole producer of meeting blocks (decision
 2026-08-23, "maximize modularity" — see Template below).
+
+## As shipped (implementation decisions, 2026-08-23)
+
+The spec below is the design and held up as written. What it left to
+implementation, and how it went:
+
+1. **Signature: `new_main(stem = 'main', path = '.', open = TRUE)`.** The
+   optional `path` argument was taken — `new_project()` needs to write into
+   a directory that is not the working one, and a `setwd()` dance in the
+   caller would be worse. Validated as an existing directory; never created.
+2. **Home: R/document.R** for `new_main()` — named for the artifact the
+   functions operate on, like every other file in R/, not for the one
+   function in it (it was briefly R/main.R, which read like a program
+   entry point). `meeting()` belongs here too when it lands: it edits the
+   same document. The parser went to R/paths.R instead,
+   beside `dated_path()`. The writer and the reader of the grammar belong in
+   one file, and retire.md already proposed the paths family as its home.
+3. **`parse_dated_filename()` was factored out now, not at retire() time.**
+   It is internal, vectorized, and returns a data frame of
+   file_name / stem / version / date / time / ext / parsed, one row per
+   input, with every field `NA` on a non-match. The exhaustive grammar
+   tests live with it in test-paths.R, as the spec required. retire()
+   inherits it and needs no new grammar work — only ordering and grouping.
+   Strictness pinned there: an extension is **required** (an extensionless
+   `main_v1_2026-08-23` is as likely to be a directory), and a name that
+   matches the shape but names no real day (`2026-02-30`) or no real time
+   (`25-00-00`) does not participate either.
+4. **The probe groups by (stem, extension)**, matching the grammar's
+   grouping everywhere else, so a rendered `main_v2_*.html` sitting beside
+   the documents cannot push the version along. Unversioned dated documents
+   (`main_2026-08-21.qmd`) do not participate in the probe.
+5. **Warning text (pinned by tests):**
+   `main_v1 already exists in <path>; creating main_v2 instead`.
+6. **Return value:** the created path, invisibly. Nothing is printed —
+   `dated_path()` is called with `print = FALSE`, so a call with
+   `open = FALSE` is completely silent, which is what the scaffolder and
+   the tests want.
+7. **Collision handling:** `file.copy(overwrite = FALSE)`, and an error if
+   the copy fails. The probe makes a collision all but unreachable; the
+   guard is there because landing on top of existing work is the one thing
+   this function must never do.
+8. `rstudioapi` went to Suggests (guarded by `requireNamespace()` as well as
+   `isAvailable()`); `utils` to Imports for the `file.edit()` fallback.
+   `tidyverse` and `sessioninfo` stayed out of DESCRIPTION entirely — they
+   are template assumptions, as specced — and the render test guards on
+   `skip_if_not_installed()` for them.
+9. **The render test earns its keep and is not slow in practice**
+   (~10s): quarto renders the template, and the assertion is that
+   `Session info` appears in the HTML. `editor: source` was the one thing
+   the spec left to a manual eyeball; **confirmed by Ian 2026-08-23** —
+   it stays in the YAML as written.
 
 ## Motivation
 
@@ -149,13 +199,18 @@ add a second only if a real recurring need appears.
   the template and into the meeting() ritual, rather than surviving as a
   lone interpolation site.
 
-## Open question (small, non-blocking)
+## Resolved: no `dpp()` example in the template (2026-08-23)
 
 - Should `# Analysis` carry a commented `dpp()` example
   (`# ggsave(p, dpp('output/figure_1a.png'), ...)`) teaching the output
   convention at the moment of use, or is that clutter deleted every
-  project? Raised 2026-08-23, unanswered; a pure template edit either
-  way, so it does not block implementation.
+  project? **Answered: leave it out** (Ian, 2026-08-23). The template
+  ships with a bare `# Analysis`.
+
+Reversible at any time and cheap: it is a one-line template edit plus a
+reinstall, with no R code involved — though note that the content tests
+assert on the template verbatim, so adding it means the template edit is
+the whole change and the copy test simply follows it.
 
 ## Validation (per package conventions)
 

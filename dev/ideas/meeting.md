@@ -1,8 +1,9 @@
 # meeting() — insert meeting-log boilerplate at cursor
 
 **Status:** design resolved (2026-08-23) — ready to implement.
-**Proposed file:** R/meeting.R (or alongside qmd-creator; decide at
-implementation)
+**Proposed file:** R/document.R, alongside `new_main()` — it edits the
+document new_main() creates, and that file is named for the artifact, not
+for one function (tests: tests/testthat/test-document.R)
 **Depends on:** nothing. Sole producer of meeting blocks (decision
 2026-08-23): new_main()'s template ships with an EMPTY Project Background,
 and the kickoff ritual is open main_v1 → cursor → meeting(). The former
@@ -57,8 +58,9 @@ outstanding, what's settled).
   point, which is fragile.
 - **No RStudio session → `cat()` the block** for copy-paste. Never leaves
   you empty-handed mid-meeting; costs three lines.
-- rstudioapi in Suggests (same dependency posture as qmd-creator's
-  file-opening).
+- rstudioapi in Suggests (same dependency posture as `new_main()`'s
+  file-opening, now shipped: guarded by `requireNamespace()` as well as
+  `isAvailable()`, with `utils::file.edit()` as the fallback).
 
 ### Internal block builder (testability, not sharing)
 

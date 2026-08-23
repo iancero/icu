@@ -4,7 +4,7 @@
 writer. Details to settle at implementation.
 **Proposed file:** R/setup.R
 **Depends on:** nothing structurally, but exists because create_project and
-qmd-creator read `options()` values. Update the option list here whenever a
+new_main() read `options()` values. Update the option list here whenever a
 new `icu.*` option ships.
 
 ## Motivation
@@ -51,4 +51,4 @@ The **guide** instead:
 
 - Status-checking logic fully testable with `withr::local_options()`.
 - The prompt/open step is untestable — keep it thin and isolated, per house
-  convention (same regime as qmd-creator's editor-opening code).
+  convention (same regime as new_main()'s editor-opening code).

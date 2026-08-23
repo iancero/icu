@@ -1,14 +1,17 @@
 # retire() — sweep superseded dated/versioned files to old/
 
 **Status:** design discussion needed (ordering rule + scope). ~~grammar must
-be settled jointly with dated-path~~ **Grammar now pinned by qmd-creator**
-(2026-08-23) — see "Shared parser" below.
+be settled jointly with dated-path~~ ~~Grammar now pinned by qmd-creator~~
+**Grammar shipped with `new_main()` (2026-08-23)** — see "Shared parser"
+below.
 **Proposed file:** R/paths.R family (shares the filename grammar)
-**Depends on:** the filename grammar as pinned in qmd-creator.md
+**Depends on:** nothing outstanding. The parser this file planned to share
+already exists: internal `parse_dated_filename()` in R/paths.R, with the
+exhaustive grammar tests in tests/testthat/test-paths.R.
 
 ## Motivation
 
-The dated-path / qmd-creator conventions deliberately accumulate files:
+The dated_path() / new_main() conventions deliberately accumulate files:
 
     main_v3_2026-08-23.qmd     <- keep (latest of main/.qmd group)
     main_v3_2026-08-22.qmd     -> old/
@@ -20,35 +23,46 @@ The dated-path / qmd-creator conventions deliberately accumulate files:
 `retire()` periodically sweeps: group files by (stem, extension), keep the
 most recent in place, move the rest to an `old/` directory.
 
-**Standing decision (2026-08-23):** qmd-creator is write-only — creating
+**Standing decision (2026-08-23, shipped):** new_main() is write-only — creating
 `main_v3` leaves `main_v2` in place. retire() is the *only* mechanism that
 moves files to `old/`, replicating the manual move step of the pre-package
 workflow. This separation is deliberate: one function writes one file, one
 function relocates files; different blast radii, separate contracts.
 
-## Shared parser (grammar now pinned upstream)
+## Shared parser (SHIPPED — do not re-decide the grammar)
 
 The grammar is:
 
     {stem}[_vN]_{YYYY-MM-DD}[_HH-MM-SS].{ext}
 
-Changes from the original draft of this file:
+It was pinned by `new_main()`'s version probe (the first consumer: it must
+recognize `{stem}_vN` to increment past it) and shipped 2026-08-23 as
+non-exported `parse_dated_filename()` in R/paths.R, beside `dated_path()`.
+retire() inherits it and should build no grammar of its own.
 
-- **Pinned by qmd-creator, not here.** qmd-creator's version probe is the
-  first consumer (it must recognize `{stem}_v*` files to increment), so the
-  grammar is fixed at its implementation time. retire() inherits it.
-- **Version segment optional** (unchanged from draft — figure_1a files have
-  none).
-- **Time segment optional** (NEW — the draft omitted it, but
-  `dated_path(hms = TRUE)` emits `_HH-MM-SS` and those files exist in real
-  folders; retire() must parse them).
+What it gives you, vectorized, one row per input name:
 
-The one-internal-parser plan stands: a non-exported
-`parse_dated_filename()` returning stem / version (NA if absent) / date /
-time (NA if absent) / ext, consumed by every function speaking the grammar.
-Whether it gets built during qmd-creator's implementation or during
-retire()'s is a timing choice; the exhaustive grammar tests live with the
-parser, wherever and whenever it is built.
+    file_name  stem  version  date  time  ext  parsed
+
+`version` is an integer (`NA` when absent — so `v10` outranks `v9`, which
+it does not alphabetically), `date` is a `Date`, `time` is `"HH-MM-SS"` or
+`NA`, and every field is `NA` when `parsed` is `FALSE`. A directory portion
+in the input is ignored for parsing and echoed back in `file_name`.
+
+Strictness, already decided and tested — retire() gets non-participation
+for free:
+
+- **Version segment optional** (figure_1a files have none); **time segment
+  optional** (`dated_path(hms = TRUE)` emits it, and those files exist).
+- **Extension required.** An extensionless `main_v1_2026-08-23` is as
+  likely to be a directory as a file, so it does not parse. This is what
+  keeps retire() from walking into a subdirectory named like a document.
+- A name that matches the shape but names no real day (`2026-02-30`) or no
+  real time (`25-00-00`) does not participate either.
+
+The exhaustive grammar tests live with the parser, in
+tests/testthat/test-paths.R. Keep retire()'s own tests focused on grouping,
+ordering, and moving.
 
 ## Ordering rule (decision needed)
 
