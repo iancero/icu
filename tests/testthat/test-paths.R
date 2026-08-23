@@ -246,3 +246,164 @@ test_that("stamping nothing is an error, not a passthrough", {
     "at least one of ymd and hms must be TRUE"
   )
 })
+
+# --- Filename grammar (parse_dated_filename) --------------------------------
+
+# The grammar is {stem}[_vN]_{YYYY-MM-DD}[_HH-MM-SS].{ext}, shared by every icu
+# function that reads or writes a dated file name. These tests are exhaustive
+# on the grammar itself; the functions built on it (new_main() today, retire()
+# later) test what they do with the parse, not the parse.
+
+test_that("the full form parses into all five fields", {
+  parsed <- parse_dated_filename("main_v3_2026-08-23_11-30-00.qmd")
+
+  expect_identical(parsed$stem, "main")
+  expect_identical(parsed$version, 3L)
+  expect_identical(parsed$date, as.Date("2026-08-23"))
+  expect_identical(parsed$time, "11-30-00")
+  expect_identical(parsed$ext, "qmd")
+  expect_true(parsed$parsed)
+})
+
+test_that("the version segment is optional", {
+  parsed <- parse_dated_filename("figure_1a_2026-08-23.png")
+
+  expect_identical(parsed$stem, "figure_1a")
+  expect_identical(parsed$version, NA_integer_)
+  expect_identical(parsed$date, as.Date("2026-08-23"))
+  expect_identical(parsed$time, NA_character_)
+  expect_true(parsed$parsed)
+})
+
+test_that("the time segment is optional", {
+  parsed <- parse_dated_filename("main_v1_2026-08-23.qmd")
+
+  expect_identical(parsed$version, 1L)
+  expect_identical(parsed$time, NA_character_)
+  expect_true(parsed$parsed)
+})
+
+test_that("a time with no version parses", {
+  parsed <- parse_dated_filename("figure_1a_2026-08-23_11-30-00.png")
+
+  expect_identical(parsed$stem, "figure_1a")
+  expect_identical(parsed$version, NA_integer_)
+  expect_identical(parsed$time, "11-30-00")
+})
+
+test_that("the version is read as a number, not a string", {
+  parsed <- parse_dated_filename(
+    c("main_v2_2026-08-23.qmd", "main_v10_2026-08-23.qmd")
+  )
+
+  # v10 must outrank v2, which it does numerically and does not alphabetically
+  expect_identical(parsed$version, c(2L, 10L))
+  expect_gt(max(parsed$version), 2L)
+})
+
+test_that("an underscore-heavy stem survives intact", {
+  parsed <- parse_dated_filename("smith_delirium_table_2_2026-08-23.docx")
+
+  expect_identical(parsed$stem, "smith_delirium_table_2")
+  expect_identical(parsed$ext, "docx")
+})
+
+test_that("a lone v in the stem is not read as a version", {
+  parsed <- parse_dated_filename("v3_2026-08-23.png")
+
+  # No underscore before it, so it is part of the stem
+  expect_identical(parsed$stem, "v3")
+  expect_identical(parsed$version, NA_integer_)
+})
+
+test_that("the directory portion is ignored, and reported back as given", {
+  parsed <- parse_dated_filename("output/old/figure_1a_2026-08-23.png")
+
+  expect_identical(parsed$stem, "figure_1a")
+  expect_identical(parsed$file_name, "output/old/figure_1a_2026-08-23.png")
+})
+
+test_that("parsing is vectorized and order-preserving", {
+  parsed <- parse_dated_filename(
+    c("main_v1_2026-08-21.qmd", "nonsense.txt", "figure_1a_2026-08-23.png")
+  )
+
+  expect_identical(nrow(parsed), 3L)
+  expect_identical(parsed$parsed, c(TRUE, FALSE, TRUE))
+  expect_identical(parsed$stem, c("main", NA, "figure_1a"))
+})
+
+test_that("an empty vector gives an empty result, not an error", {
+  parsed <- parse_dated_filename(character(0))
+
+  expect_identical(nrow(parsed), 0L)
+  expect_identical(parsed$version, integer(0))
+})
+
+# --- Grammar: non-participation ---------------------------------------------
+
+test_that("a near-miss date is left unparsed rather than reinterpreted", {
+  # The motivating real-world case: an underscore where a hyphen belongs
+  parsed <- parse_dated_filename("figure_1a_2026_08-22.png")
+
+  expect_false(parsed$parsed)
+  expect_identical(parsed$stem, NA_character_)
+  expect_identical(parsed$date, as.Date(NA))
+})
+
+test_that("undated names do not participate", {
+  parsed <- parse_dated_filename(c("main.qmd", "main_v1.qmd", "README"))
+
+  expect_identical(parsed$parsed, c(FALSE, FALSE, FALSE))
+})
+
+test_that("a name with no extension does not participate", {
+  # Just as likely to be a directory as a file
+  parsed <- parse_dated_filename("main_v1_2026-08-23")
+
+  expect_false(parsed$parsed)
+})
+
+test_that("a date that matches the shape but names no real day is rejected", {
+  parsed <- parse_dated_filename(
+    c("main_2026-02-30.qmd", "main_2026-13-01.qmd")
+  )
+
+  expect_identical(parsed$parsed, c(FALSE, FALSE))
+})
+
+test_that("a time that matches the shape but names no real time is rejected", {
+  parsed <- parse_dated_filename("main_2026-08-23_25-00-00.qmd")
+
+  expect_false(parsed$parsed)
+})
+
+test_that("a truncated or overlong stamp does not participate", {
+  parsed <- parse_dated_filename(
+    c("main_26-08-23.qmd", "main_2026-08-23_11-30.qmd", "_2026-08-23.qmd")
+  )
+
+  expect_identical(parsed$parsed, c(FALSE, FALSE, FALSE))
+})
+
+test_that("dated_path() output parses back under the grammar", {
+  # The writer and the reader must agree, in both stamp modes
+  round_trip <- parse_dated_filename(
+    c(
+      dated_path("output/figure_1a.png", print = FALSE),
+      dated_path("output/main_v2.qmd", hms = TRUE, print = FALSE)
+    )
+  )
+
+  expect_identical(round_trip$parsed, c(TRUE, TRUE))
+  expect_identical(round_trip$stem, c("figure_1a", "main"))
+  expect_identical(round_trip$version, c(NA_integer_, 2L))
+  expect_identical(round_trip$date, rep(Sys.Date(), 2))
+  expect_identical(is.na(round_trip$time), c(TRUE, FALSE))
+})
+
+# --- Grammar: input validation ----------------------------------------------
+
+test_that("a non-character file_name is rejected", {
+  expect_error(parse_dated_filename(1), "file_name must be character")
+})

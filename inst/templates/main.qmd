@@ -1,0 +1,52 @@
+---
+title: "Untitled"
+author: "Ian Cero"
+date: today
+format:
+  html:
+    embed-resources: true
+    toc: true
+    toc-depth: 2
+editor: source
+execute:
+  message: false
+---
+
+```{r}
+#| label: setup
+#| include: false
+
+library(tidyverse)
+
+# Session record: appended to the END of every render by this document
+# hook, so the rendered file always states which package versions produced
+# it. Lives here in setup (rather than as a bottom chunk) so active work
+# never buries or deletes it. Do not remove.
+knitr::knit_hooks$set(document = function(x) {
+  c(
+    x,
+    '## Session info',
+    '<details><summary>Packages and versions for this render</summary>',
+    '```',
+    capture.output(sessioninfo::session_info()),
+    '```',
+    '</details>'
+  )
+})
+```
+
+# Project Background
+
+# Data Provenance
+
+All files in `data/` are exactly as received from outside the project and
+are never written to by project code; anything derived is written to
+`output/` under the dated-filename convention. Files received so far:
+
+- 
+
+# Data Wrangling
+
+# Analysis
+
+# Results Summary

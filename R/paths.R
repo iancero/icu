@@ -198,3 +198,99 @@ dpp <- function(file_name) {
 dtpp <- function(file_name) {
   dated_path(file_name, ymd = TRUE, hms = TRUE, print = TRUE)
 }
+
+
+# --- The dated-file grammar -------------------------------------------------
+
+# Every icu function that speaks file names speaks this one grammar:
+#
+#     {stem}[_vN]_{YYYY-MM-DD}[_HH-MM-SS].{ext}
+#
+# Both bracketed segments are optional, because both are optional in the files
+# the convention actually produces: dated_path() emits a time only when
+# hms = TRUE, and only documents carry a manual major version. The extension is
+# not optional -- see the strictness note below.
+#
+# dated_path() writes names in this grammar; parse_dated_filename() reads them
+# back, so the writer and the reader live in one file. Internal on purpose:
+# it is a shared contract between icu functions, not a user-facing tool.
+# new_main() is its first consumer (the version probe has to recognize
+# `{stem}_vN` to increment past it); retire() will be its second, needing the
+# date and time segments to order a group.
+#
+# Nothing here touches the filesystem. It parses names, not files on disk.
+
+parse_dated_filename <- function(file_name) {
+
+  stopifnot(
+    'file_name must be character' = is.character(file_name)
+  )
+
+  # Anchored and strict about every segment, because non-participation is the
+  # safe failure mode: a near-miss name (`figure_1a_2026_08-22.png`) is
+  # reported as unparsed and left alone, never reinterpreted into something
+  # close enough to act on. Requiring an extension is part of that -- an
+  # extensionless `main_v1_2026-08-23` is as likely to be a directory.
+  #
+  # The stem is lazy so `main_v1_2026-08-23` parses as stem "main", version 1,
+  # rather than stem "main_v1" with the version segment skipped.
+  pattern <- paste0(
+    '^(.+?)',                             # stem
+    '(?:_v([0-9]+))?',                    # optional _vN
+    '_([0-9]{4}-[0-9]{2}-[0-9]{2})',      # date
+    '(?:_([0-9]{2}-[0-9]{2}-[0-9]{2}))?', # optional _HH-MM-SS
+    '$'
+  )
+
+  # Grouping is per-directory, so a stem never carries a directory with it
+  name <- basename(file_name)
+  ext  <- tools::file_ext(name)
+  base <- tools::file_path_sans_ext(name)
+
+  parts <- regmatches(base, regexec(pattern, base))
+
+  # regexec() gives back a zero-length vector for a name that does not match at
+  # all, and "" for an optional group that was not used; both become NA here
+  field <- function(i) {
+    vapply(
+      parts,
+      function(p) if (length(p) == 0L) NA_character_ else p[[i + 1L]],
+      character(1)
+    )
+  }
+
+  stem    <- field(1)
+  version <- field(2)
+  date    <- field(3)
+  time    <- field(4)
+
+  version[!is.na(version) & !nzchar(version)] <- NA_character_
+  time[!is.na(time) & !nzchar(time)]          <- NA_character_
+
+  # A name can match the shape and still name no real day (2026-02-30) or no
+  # real time (25-00-00). Strict means strict: those do not participate either.
+  day <- as.Date(date, format = '%Y-%m-%d')
+
+  parsed <-
+    !is.na(stem) &
+    nzchar(ext) &
+    !is.na(day) &
+    (is.na(time) | !is.na(strptime(time, format = '%H-%M-%S')))
+
+  stem[!parsed]    <- NA_character_
+  version[!parsed] <- NA_character_
+  day[!parsed]     <- as.Date(NA)
+  time[!parsed]    <- NA_character_
+  ext[!parsed]     <- NA_character_
+
+  data.frame(
+    file_name = file_name,
+    stem      = stem,
+    version   = as.integer(version),
+    date      = day,
+    time      = time,
+    ext       = ext,
+    parsed    = parsed,
+    stringsAsFactors = FALSE
+  )
+}
