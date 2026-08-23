@@ -5,3 +5,9 @@
 .DS_Store
 .quarto
 practice.qmd
+
+# Scratch documents from trying out new_main(); real ones live in projects,
+# not in the package repo. Covers the render output too.
+main_v*.qmd
+main_v*.html
+main_v*_files/

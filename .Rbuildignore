@@ -5,3 +5,6 @@
 ^README\.Rmd$
 ^dev$
 ^CLAUDE\.md$
+^main_v.*\.qmd$
+^main_v.*\.html$
+^main_v.*_files$
