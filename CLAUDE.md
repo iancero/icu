@@ -38,7 +38,9 @@ Generated files — never hand-edit: `NAMESPACE`, `man/*.Rd` (run `devtools::doc
 
 ## Layout and conventions
 
-Flat package: one topic file per area in [R/](R/), with a matching `tests/testthat/test-<topic>.R`. Currently [R/paths.R](R/paths.R), [R/random.R](R/random.R), [R/reexports.R](R/reexports.R), [R/rounding.R](R/rounding.R).
+Flat package: one topic file per area in [R/](R/), with a matching `tests/testthat/test-<topic>.R`. Currently [R/document.R](R/document.R), [R/paths.R](R/paths.R), [R/random.R](R/random.R), [R/reexports.R](R/reexports.R), [R/rounding.R](R/rounding.R). Files are named for the *artifact or area* the functions operate on, never for one function in them.
+
+**`new_main()`'s output is a file, not code.** [inst/templates/main.qmd](inst/templates/main.qmd) is copied verbatim — no placeholders, no interpolation — so changing what a new analysis document contains is a template edit plus a reinstall, with no R to touch. The tests assert the created file is line-for-line identical to the template, so a template edit is the whole change. The filename grammar it and [dated_path()](R/paths.R) share (`{stem}[_vN]_{date}[_HH-MM-SS].{ext}`) is parsed in one place: internal `parse_dated_filename()` in [R/paths.R](R/paths.R), whose exhaustive grammar tests live in [test-paths.R](tests/testthat/test-paths.R). Don't re-derive that grammar elsewhere.
 
 **Input validation is a load-bearing contract.** Every exported function opens with a `stopifnot()` block of named conditions whose names read as user-facing messages (`'unit must be greater than 0' = unit > 0`). Tests assert on those strings via `expect_error(..., "unit must be greater than 0")`, so **editing a message breaks tests** — update both together. New functions should follow the same pattern: check length, type, finiteness, and range separately so the failure message pinpoints the problem.
 
@@ -91,6 +93,8 @@ Capture the reasoning and the *rejected* alternatives, not just the conclusion �
 Some files also carry a caution (e.g. "touches an existing exported function — check tests first"). Honor it as part of the task.
 
 **Working an idea.** Read the whole file first, plus any file it depends on. As open questions get resolved, **write the answers back into the file** and move them out of Open questions into Design notes — do this when the decision is made, even if implementation stops there. A decision recorded only in chat is lost. When the function ships, delete the file or move it to `dev/ideas/done/`, and update any other idea file that referenced it.
+
+**Repo chores live in [dev/chores/](dev/chores/)**, same one-file-per-item shape and same binding `Status:` gate, for tooling and hygiene work that isn't a function idea (see [dev/chores/README.md](dev/chores/README.md)). Note the open one: the working tree mixes CRLF and LF file by file, which makes multi-line `perl -0p`/`sed -z` patterns silently no-op on the CRLF files — if a bulk edit "applies" but nothing changed, that's why. See [dev/chores/line-endings.md](dev/chores/line-endings.md).
 
 **Ideas are not commitments.** The backlog is a staging area, not a to-do list to burn down. Don't start on a backlogged item because it's there — only when Ian asks. Surfacing that a relevant idea already exists ("dev/ideas/project-scaffold.md covers this — want me to pick it up?") is useful; silently implementing it is not.
 

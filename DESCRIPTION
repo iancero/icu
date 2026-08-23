@@ -10,6 +10,7 @@ Roxygen: list(markdown = TRUE)
 URL: https://github.com/iancero/icu
 BugReports: https://github.com/iancero/icu/issues
 Suggests: 
+    rstudioapi,
     testthat (>= 3.0.0),
     tibble
 Config/testthat/edition: 3
@@ -18,5 +19,6 @@ Imports:
     glue,
     janitor,
     tidyselect,
-    tools
+    tools,
+    utils
 Config/roxygen2/version: 8.1.0
