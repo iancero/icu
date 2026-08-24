@@ -328,6 +328,16 @@ test_that("a render appends the session-info section", {
   skip_if_not_installed("tidyverse")
   skip_if_not_installed("sessioninfo")
 
+  # The template loads icu itself, and quarto renders in a separate R process
+  # that cannot see a load_all()'d package -- so this test can only run
+  # against an installed icu. lib.loc is passed explicitly because
+  # find.package() would otherwise answer from the loaded dev namespace and
+  # this would never skip when it should.
+  skip_if(
+    length(find.package("icu", lib.loc = .libPaths(), quiet = TRUE)) == 0,
+    "icu is not installed, so the template's library(icu) cannot resolve"
+  )
+
   dir <- tempfile()
   dir.create(dir)
   on.exit(unlink(dir, recursive = TRUE), add = TRUE)

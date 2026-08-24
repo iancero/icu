@@ -1,17 +1,98 @@
 # new_project() — one-call consulting project scaffolder
 
-**Status:** design resolved (2026-08-23) — ready to implement. All
-previously-parked blocking decisions are now made (see "Resolved
-2026-08-23, second pass" below); remaining parked items are non-blocking.
-**Proposed file:** R/project.R (working name)
-**Depends on:** new_main() — **shipped 2026-08-23**, see done/new-main.md;
+**Status:** shipped as `new_project()` in R/project.R (tests in
+tests/testthat/test-project.R); the `.Rproj` template installed at
+inst/templates/project.Rproj. Last of the implementation wave. The spec
+below is the design and held up as written; what it left to implementation
+is recorded under "As shipped" immediately after this block. **No open
+questions remain** — the last one (an renv opt-in argument) was closed
+2026-08-24 with a no; see Reproducibility.
+**Shipped file:** R/project.R (the working name was kept — the area is
+projects, and the file is named for the area, not the function)
+**Depended on:** new_main() — **shipped 2026-08-23**, see done/new-main.md;
 call it as `new_main(path = <project dir>, open = FALSE)` to seed main_v1,
 and note that it returns the created path invisibly and creates nothing
-else. conventions_md() (seeds ai/conventions.md) is the remaining
-dependency. meeting()/meeting_block() is **not** a dependency of the
+else. conventions_md() — **shipped 2026-08-23**, see done/conventions-md.md
+— seeds ai/conventions.md, but **its default path is `'.'`, so the scaffold
+must pass the ai/ directory explicitly**: `conventions_md(file.path(project,
+'ai'))`, called **after** creating that directory, since it never creates
+one. Expect it to announce the path it wrote. Nothing is outstanding: both
+dependencies now exist. meeting()/meeting_block() is **not** a dependency of
+the
 scaffold: the template ships an empty Project Background and the first
 block is typed by hand at the kickoff, like every later one. Outermost of
 the filesystem functions; orchestrates, owns no logic itself.
+
+## As shipped (implementation decisions, 2026-08-23)
+
+1. **Signature: `new_project(name)`.** One required argument and nothing
+   else, as specced. No `path` argument — the destination is the option's
+   job, and a second way to say it would undercut "the call works the same
+   from wherever you happen to be." No `open` argument either, unlike
+   new_main(): new_main() needed one because *this* function is a caller
+   that must suppress the open, and nothing calls new_project(). Tests
+   reach the no-editor path through the `rstudio_available()` seam, the
+   way meeting()'s do.
+2. **`.Rproj` content ships as a template**, inst/templates/project.Rproj,
+   copied verbatim and renamed to the folder name — the same posture as
+   main.qmd and conventions.md, so what a new project's editor settings
+   are is a content edit plus a reinstall, with no R to touch. It is the
+   package's own icu.Rproj minus the `BuildType: Package` block, which
+   keeps `LineEndingConversion: Posix` in every new project (see
+   ../chores/line-endings.md for why that matters). Note the near-miss:
+   `.Rbuildignore` is scoped to `^icu\.Rproj$`, not a blanket
+   `^.*\.Rproj$`, so the template does ship. A blanket pattern would have
+   silently excluded it from the built package.
+3. **`icu.projects_dir` set but pointing at a directory that does not
+   exist → create it and proceed, silently** (decision: Ian, 2026-08-23;
+   the spec covered only the unset case). The option is a statement of
+   where projects go, and a Box folder that has not synced onto this
+   machine yet is the ordinary reason it is missing. Not a fallback, so
+   not a warning. Rejected: erroring (leaves you with no project
+   mid-meeting, against the north star), and treating it as unset (throws
+   away a destination you did configure).
+4. **An option value that is not a usable path at all** — not a length-1,
+   non-NA, non-empty character string — **is treated as an unset one**:
+   loud getwd() fallback, with the warning saying "not a single directory
+   path" rather than "not set". There is nothing to take at its word, and
+   still no reason to end the meeting without a project. This is the one
+   sub-case of (3) that could not follow it, since you cannot `dir.create()`
+   a number.
+5. **The unset-option warning points at the `.Rprofile` option, not at
+   `icu_setup()`** (decision: Ian, 2026-08-23), because icu_setup() is
+   still backlog — the specced text would have told you mid-meeting to
+   call a function that does not exist. The warning names what went wrong,
+   the path the project landed in, and `options(icu.projects_dir = ...)`.
+   When icu_setup() ships, adding it is a one-line text edit plus a test
+   update; icu-setup.md carries the note.
+6. **Name validation** (parked item 2, now settled): character, length 1,
+   non-NA, non-empty — plus **no path separator**. Permissive otherwise,
+   as the parked item leaned. The separator is the one exception because
+   it is not a strictness question: `smith/delirium` would put the project
+   somewhere other than the projects directory, which makes it a path and
+   not a name.
+7. **Failure is loud, and there is no rollback.** Each `dir.create()` and
+   the `.Rproj` copy is checked and errors by name if it fails, leaving a
+   partial project behind. Deliberate: cleanup code that deletes
+   directories is exactly the code you do not want running unattended near
+   real work, and the collision check has already established that nothing
+   here existed a moment ago.
+8. **Ordering is load-bearing**: skeleton directories first, then the
+   `.Rproj`, then `new_main(path, open = FALSE)`, then
+   `conventions_md(file.path(project, 'ai'))` — which needs `ai/` to
+   already exist, since it never creates one. The fallback warning is
+   raised *after* creation succeeds, so it can name a project that really
+   exists and cannot fire on a run that errored out.
+9. **Output**: conventions_md()'s announcement is let through, as the spec
+   anticipated, and it is the only thing on stdout — new_main() is silent
+   by design, which is what makes that one line legible. Outside RStudio
+   the no-open notice goes out through `message()` rather than the `cat()`
+   dated_path() and conventions_md() use: their reason is surviving a
+   document's `message: false`, and nobody scaffolds a project from inside
+   a render.
+10. **Return value:** the project directory, invisibly, per house
+    convention. The tests assert the tree, not the return value, as the
+    spec required.
 
 ## Motivation and design north star
 
@@ -58,7 +139,12 @@ aggregate output only, never data — see "AI workflow" below).
   project in the wrong place is a ten-second fix afterward; an error means
   no project at all. Wrong-but-loud beats right-but-absent.
 - icu_setup() (see icu-setup.md) is the guided way to get the option set;
-  the warning text should point at it.
+  the warning text should point at it. **Superseded at implementation**:
+  icu_setup() is still backlog, so the shipped warning points at the
+  `.Rprofile` option directly rather than at a function that does not
+  exist. See "As shipped" item 5.
+- The set-but-missing and set-but-unusable cases were not covered here;
+  see "As shipped" items 3 and 4.
 
 ### Opening
 
@@ -200,7 +286,24 @@ no coordination needed.
 - Default insurance instead: the session-info document hook in the qmd
   template (shipped; see done/new-main.md) — render once at wrap, versions on
   record.
-- Full renv (library outside Box) as an opt-in argument: PARKED.
+- Full renv (library outside Box) as an opt-in argument: **NO — closed
+  2026-08-24 (Ian).** Not parked, not deferred: decided against, and
+  `new_project()` will not grow an renv argument. The session-info hook is
+  the reproducibility story for this paradigm, full stop.
+
+  The reasoning that closed it: an opt-in nobody opts into is worse than
+  no option at all — it costs an argument, a branch, a test, and a
+  paragraph of documentation, permanently, in exchange for a capability
+  that the two bullets above have already argued against using. Every
+  reason renv was rejected as the default (slow, unpleasant, pathological
+  library layout inside Box) still applies on the day you would reach for
+  it, so the argument would sit there as a trap rather than an escape
+  hatch. Nothing about it got easier by waiting.
+
+  Reversible, and cheap if it ever comes back: an additive argument with
+  a default, no restructuring. That was true while it was parked and is
+  still true now — so closing it costs nothing that reopening it would
+  not restore.
 
 ## Resolved 2026-08-23, second pass (formerly parked)
 
@@ -219,13 +322,15 @@ no coordination needed.
    pairs with new_main(). (No known new_project export in common
    packages; confirm with the standard conflict check at implementation.)
 
-## Parked / open questions (non-blocking)
+## Parked / open questions — none left (closed 2026-08-24)
 
-1. renv opt-in argument: ever, and what shape. (Session-info hook is the
-   default insurance; see Reproducibility above.)
-2. Validation specifics (name argument: character, length 1, non-NA,
-   non-empty; filesystem-legal characters? lean permissive — Ian's names
-   are disciplined) — settle at implementation.
+Both parked items are now decided, so this file carries no open questions
+and nothing is waiting on a conversation:
+
+1. renv opt-in argument — **closed 2026-08-24: no.** See Reproducibility
+   above for the decision and the reasoning.
+2. Validation specifics — settled at implementation; see "As shipped"
+   item 6.
 
 ## Testing notes
 

@@ -39,14 +39,28 @@ Implementation wave, in order. Steps 1 and 2 are done:
    `rstudio_available()`, which both functions share and the tests mock —
    `rstudioapi::isAvailable()` is TRUE when the suite runs inside RStudio,
    so anything with an editor side effect must go through it.
-3. **conventions-md.md** (conventions_md()) — independent; any time before
-   new_project().
-4. **project-scaffold.md** (new_project()) — last of the wave; orchestrates
-   `new_main(path = ..., open = FALSE)` and conventions_md(), owns no logic
-   itself.
+3. ~~**conventions-md.md** (conventions_md())~~ — **shipped 2026-08-23**
+   (see done/). Master at inst/templates/conventions.md, copied verbatim.
+   `path` defaults to `'.'`, so callers pass `ai/` themselves. **What the
+   master should actually say is an open chore** — what ships today is
+   project mechanics, not statistical practice: see
+   ../chores/conventions-content.md. Pure content edit when decided.
+4. ~~**project-scaffold.md** (new_project())~~ — **shipped 2026-08-23**
+   (see done/). Orchestrates `new_main(path = ..., open = FALSE)` and
+   `conventions_md(file.path(project, 'ai'))`, owns no logic itself. Third
+   template installed, at inst/templates/project.Rproj. Note for
+   icu-setup.md: its unset-option warning points at
+   `options(icu.projects_dir = ...)` in `.Rprofile`, **not** at
+   `icu_setup()` as that spec had it — revisit the text when icu_setup()
+   ships.
 
-Independent of the wave, any time: **retire.md** (grammar now shipped, and
-the parser it planned to share already exists), **icu-setup.md**.
+**The wave is complete.** Nothing in the backlog is ordered against
+anything else any more; what remains is independent, and none of it is a
+commitment.
+
+Independent, any time: **retire.md** (grammar now shipped, and the parser
+it planned to share already exists), **icu-setup.md** (now the only
+consumer of `icu.projects_dir`'s story — see the note above).
 
 Deliberately backlog, not in the wave: **codebook-md.md**, then
 **synthetic-data.md** (downstream of codebook — consumes its schema, never
@@ -54,5 +68,7 @@ the data).
 
 Shipped: dated-path (`dated_path()` + shorthands), round-cols-default
 (`digits = 3`), new-main (`new_main()` + internal `parse_dated_filename()`),
-meeting (`meeting()` + internal `meeting_block()`) — see done/. Superseded: qmd-creator.md was replaced wholesale by
+meeting (`meeting()` + internal `meeting_block()`), conventions-md
+(`conventions_md()`), project-scaffold (`new_project()` + internal
+`projects_dir()`) — see done/. Superseded: qmd-creator.md was replaced wholesale by
 new-main.md (2026-08-23) and is gone.

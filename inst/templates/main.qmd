@@ -17,6 +17,7 @@ execute:
 #| include: false
 
 library(tidyverse)
+library(icu)
 
 # Session record: appended to the END of every render by this document
 # hook, so the rendered file always states which package versions produced

@@ -62,6 +62,30 @@ implementation, and how it went:
    the spec left to a manual eyeball; **confirmed by Ian 2026-08-23** —
    it stays in the YAML as written.
 
+## Template edits since shipping
+
+The template is the function's output, so content changes are logged here
+rather than in a code diff:
+
+- **2026-08-23** — `library(icu)` added to the setup chunk, beside
+  `library(tidyverse)`. It was missing while `conventions_md()`'s master
+  told projects to call `dpp()` unqualified; Ian chose to fix the template
+  rather than qualify every call site. See done/conventions-md.md.
+
+  Consequence, found immediately by the render test: **a document now
+  needs icu *installed* to render.** quarto renders in a separate R
+  process, which cannot see a `load_all()`'d package, so the render test
+  skips unless icu is in a library path — and any machine that renders a
+  project document needs `devtools::install()` (or a `pak::pak()` of the
+  repo) at least once. The skip guard passes `lib.loc` explicitly, because
+  `find.package()` would otherwise answer from the loaded dev namespace
+  and never skip.
+
+  **Accepted by Ian, 2026-08-23:** requiring icu to be installed is fine.
+  So the skip is expected behavior, not a defect — if `devtools::test()`
+  reports `SKIP 1` on a machine without icu installed, that is the render
+  test correctly declining to run, and installing icu brings it back.
+
 ## Motivation
 
 One call scaffolds a new analysis document with house conventions baked in.
