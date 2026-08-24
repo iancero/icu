@@ -1,10 +1,57 @@
 # Normalize line endings to one convention
 
-**Status:** decision needed — one choice (which convention the *working
-tree* uses), after which the work is mechanical and takes minutes.
+**Status:** DONE 2026-08-24 — option A chosen and executed (commit 27d1463).
+Everything from "Motivation" down is the original analysis, kept as written.
 **Scope:** whole repo; adds a `.gitattributes`. No package code changes, no
 history rewriting.
 **Raised:** 2026-08-23, while shipping `new_main()`.
+
+## As done (2026-08-24)
+
+Option **A**: a `.gitattributes` carrying `* text=auto eol=lf`. Five notes
+for anyone reading this later, because the steps as written needed three
+corrections.
+
+1. **It was drifting, not stable.** Re-measured at execution time: 27
+   `w/lf` / 25 `w/crlf`, against 21/15 when this was raised the day
+   before. Files that were LF then were CRLF by then — `R/paths.R`,
+   `tests/testthat/test-paths.R`, `NAMESPACE`, two `man/*.Rd`. The
+   mechanism is git itself: with `core.autocrlf=true` and no
+   `.gitattributes`, every checkout writes CRLF while shell tooling
+   writes LF, so a file's form is whichever tool touched it last. Option
+   C ("leave it") would have kept ratcheting, not held steady.
+2. **Step 2 was a no-op.** `git add --renormalize .` staged nothing — the
+   index was already uniformly LF, as this file said. The operative step
+   is 3, the working-tree refresh (`git rm --cached -r .` then
+   `git reset --hard`).
+3. **Step 4 was already done.** `icu.Rproj` already carried
+   `LineEndingConversion: Posix`. RStudio was therefore never the CRLF
+   source here, which is what points the finger at git's checkout.
+4. **Step 5 was unnecessary and was skipped.** `.gitattributes` is in
+   `tools:::.hidden_file_exclusions`, so `R CMD build` drops it from the
+   tarball: no `.Rbuildignore` entry, no top-level-files NOTE, and no
+   reason to spend a `devtools::check()` on it.
+5. **No binary exceptions added.** The repo has no binary files, and
+   `text=auto` detects them by content if any arrive — so the
+   `*.png binary` line anticipated below is not needed even once
+   `man/figures/` exists.
+
+Outcome: all 53 tracked files report `i/lf w/lf`, and `devtools::test()`
+gives 0 failures / 354 passing / 1 skip (the documented render-test skip).
+
+`inst/templates/main.qmd` went CRLF to LF as expected, so `new_main()`'s
+output is LF from here on and the three installed templates now agree with
+each other. No test moved: the content contracts compare `readLines()`
+output, which strips endings either way.
+
+Deliberately **not** changed: `inst/templates/project.Rproj` — and in
+fact nothing was needed there. It is `icu.Rproj` minus the
+`BuildType: Package` block, so it already carries
+`LineEndingConversion: Posix`, and every scaffolded project inherits the
+convention without this chore touching the template.
+
+The convention is now stated in CLAUDE.md under "Layout and conventions",
+with `git ls-files --eol` named as the check.
 
 ## Motivation
 

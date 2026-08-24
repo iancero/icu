@@ -39,7 +39,7 @@ the filesystem functions; orchestrates, owns no logic itself.
    are is a content edit plus a reinstall, with no R to touch. It is the
    package's own icu.Rproj minus the `BuildType: Package` block, which
    keeps `LineEndingConversion: Posix` in every new project (see
-   ../chores/line-endings.md for why that matters). Note the near-miss:
+   ../../chores/done/line-endings.md for why that matters). Note the near-miss:
    `.Rbuildignore` is scoped to `^icu\.Rproj$`, not a blanket
    `^.*\.Rproj$`, so the template does ship. A blanket pattern would have
    silently excluded it from the built package.

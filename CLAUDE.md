@@ -58,6 +58,8 @@ Flat package: one topic file per area in [R/](R/), with a matching `tests/testth
 
 **Roxygen markdown eats `[ ]`.** A literal bracket pair anywhere in a roxygen block — including inside a fenced code block — is parsed as a markdown reference link and leaves junk like `[ ]: R:%20` in the generated `.Rd`. Show such content with `\preformatted{}` instead of a fence, and keep bracket pairs out of the prose. Relevant to anything documenting markdown or checkbox syntax.
 
+**Line endings are LF everywhere**, pinned by `.gitattributes` (`* text=auto eol=lf`) and `LineEndingConversion: Posix` in `icu.Rproj`. Index and working tree agree on every machine and from every tool, so multi-line `perl -0p`/`sed -z` patterns match uniformly rather than silently no-opping on half the files. Verify with `git ls-files --eol`: every row should read `i/lf w/lf`. Independently of endings, it is still worth confirming that a bulk edit actually changed something (`git diff --stat`) — a silent no-op has other causes.
+
 **Always use `pkg::fn()` prefixes** for anything outside base R (`stats::rbinom()`, `dplyr::mutate()`, `tidyselect::where()`). A prior commit existed solely to fix `R CMD check` warnings from missing prefixes.
 
 **Re-export pattern** ([R/reexports.R](R/reexports.R)): add the package to `Imports` via `usethis::use_package()`, then
@@ -102,7 +104,7 @@ Some files also carry a caution (e.g. "touches an existing exported function —
 
 **Working an idea.** Read the whole file first, plus any file it depends on. As open questions get resolved, **write the answers back into the file** and move them out of Open questions into Design notes — do this when the decision is made, even if implementation stops there. A decision recorded only in chat is lost. When the function ships, delete the file or move it to `dev/ideas/done/`, and update any other idea file that referenced it.
 
-**Repo chores live in [dev/chores/](dev/chores/)**, same one-file-per-item shape and same binding `Status:` gate, for tooling and hygiene work that isn't a function idea (see [dev/chores/README.md](dev/chores/README.md)). Note the open one: the working tree mixes CRLF and LF file by file, which makes multi-line `perl -0p`/`sed -z` patterns silently no-op on the CRLF files — if a bulk edit "applies" but nothing changed, that's why. See [dev/chores/line-endings.md](dev/chores/line-endings.md).
+**Repo chores live in [dev/chores/](dev/chores/)**, same one-file-per-item shape and same binding `Status:` gate, for tooling and hygiene work that isn't a function idea (see [dev/chores/README.md](dev/chores/README.md)). Done ones move to [dev/chores/done/](dev/chores/done/).
 
 **Ideas are not commitments.** The backlog is a staging area, not a to-do list to burn down. Don't start on a backlogged item because it's there — only when Ian asks. Surfacing that a relevant idea already exists ("dev/ideas/project-scaffold.md covers this — want me to pick it up?") is useful; silently implementing it is not.
 

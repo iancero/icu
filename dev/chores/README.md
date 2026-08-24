@@ -13,5 +13,4 @@ Like `ideas/`, this folder is `.Rbuildignore`d and never ships. Chores are
 not commitments either — don't start one because it's here; surface it when
 it's relevant and let Ian decide.
 
-When a chore is done: delete the file, or move it to `dev/chores/done/`
-(create that folder when there's a first occupant).
+When a chore is done: delete the file, or move it to `dev/chores/done/`.
