@@ -11,10 +11,16 @@ export(glue)
 export(meeting)
 export(new_main)
 export(new_project)
+export(now)
 export(rbernoulli)
 export(retire)
 export(round_cols)
 export(round_to_nearest)
 export(round_with_min)
+export(today)
 importFrom(glue,glue)
 importFrom(janitor,clean_names)
+importFrom(lubridate,
+  now,
+  today
+)

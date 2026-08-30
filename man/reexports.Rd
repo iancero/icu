@@ -5,6 +5,8 @@
 \alias{reexports}
 \alias{clean_names}
 \alias{glue}
+\alias{today}
+\alias{now}
 \title{Objects exported from other packages}
 \keyword{internal}
 \description{
@@ -15,5 +17,7 @@ below to see their documentation.
   \item{glue}{\code{\link[glue:glue]{glue()}}}
 
   \item{janitor}{\code{\link[janitor:clean_names]{clean_names()}}}
+
+  \item{lubridate}{\code{\link[lubridate:now]{now()}}, \code{\link[lubridate:today]{today()}}}
 }}
 
