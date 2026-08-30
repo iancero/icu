@@ -257,7 +257,15 @@ change between the two calls, so what moved is not guaranteed to be what
 you approved; and a count reading `2` when the plan had `5` is the
 cheapest possible signal that the sweep stopped early.
 
-**No `keep` argument.** Dropped, against this file's original lean. If
+**No `keep` argument.** Dropped, against this file's original lean.
+(**2026-08-30:** still no `keep`, but the sibling argument this reasoning
+also ruled out now exists. `ignore` takes a vector of stems that never
+participate in a sweep, defaulting to the migration log's own stem. The
+distinction that justifies it: `keep` would protect *a file the sweep had
+judged*, on a need that had not appeared; `ignore` excludes *a class of
+names the sweep should never judge*, on a need the package created for
+itself when `retire()` started writing a log into `old/`. Same file as
+above.) If
 retire() sweeps a version you turn out to want, it is sitting in `old/` —
 this is a move, not a delete, and the dry run showed you first. The cost
 of not having it is one trip to `old/`; the cost of having it is permanent
@@ -273,6 +281,18 @@ filesystem, and a copy-and-unlink fallback is never needed.
 
 - **`dry_run = TRUE` default:** print the keep/move plan; touch nothing
   unless `dry_run = FALSE`. Creating `old/` counts as touching.
+
+  **Revised 2026-08-30**, after using the shipped function — see
+  `../../chores/done/retire-confirm-and-log.md` for the full reasoning.
+  `dry_run` is gone, replaced by `action`, one of `'ask'` (the default:
+  print the plan, then prompt), `'plan'` (the old `dry_run = TRUE`) and
+  `'move'` (the old `dry_run = FALSE`). The *safe by default* half of this
+  non-negotiable stands unchanged — nothing is touched, `old/` included,
+  until someone says so, and with no one to ask, `'ask'` degrades to
+  `'plan'`. What changed is that saying so no longer means retyping the
+  call, which also closes a hole this file accepted: the directory could
+  change between the two calls, so what the second one moved was not
+  guaranteed to be what the first one showed.
 - **Idempotent:** running again immediately after a sweep is a no-op.
 - **Never overwrite:** if a target name already exists in `old/` (possible
   if a file was restored and re-retired), that file is **skipped, with a

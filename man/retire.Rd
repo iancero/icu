@@ -4,14 +4,21 @@
 \alias{retire}
 \title{Sweep superseded dated files into old/}
 \usage{
-retire(path = ".", dry_run = TRUE)
+retire(path = ".", action = "ask", ignore = "retire_migration")
 }
 \arguments{
 \item{path}{A single, non-\code{NA} character string naming an existing
 directory: the directory to sweep. Defaults to the working directory.}
 
-\item{dry_run}{A single \code{TRUE}/\code{FALSE}: print the plan and move nothing.
-Defaults to \code{TRUE}, so a bare \code{retire()} is always safe to type.}
+\item{action}{A single string, one of \code{"ask"}, \code{"plan"} or \code{"move"}.
+\code{"ask"}, the default, prints the plan and then asks whether to proceed;
+\code{"plan"} prints the plan and moves nothing; \code{"move"} moves without asking.
+See the Asking section for what happens when there is no one to ask.}
+
+\item{ignore}{A character vector of stems that never participate in a
+sweep. Defaults to \code{"retire_migration"}, the stem of the log described
+below, so sweeping an \verb{old/} directory leaves its own records alone. Pass
+\code{character()} to sweep everything.}
 }
 \value{
 The plan, invisibly: a data frame with one row per entry in \code{path}
@@ -20,11 +27,16 @@ and the columns \code{path}, \code{stem}, \code{ext}, \code{version}, \code{date
 \code{"skipped"} or \code{"ignored"}, and \code{destination} is \code{NA} except on \code{retire}
 rows. The parsed fields are carried so that a surprising decision can be
 read off the plan rather than reconstructed.
+
+The same frame comes back whatever \code{action} was and whatever you answered:
+a \code{retire} row means the file lost its group, not that it moved. The log
+in \verb{old/} is the on-disk record of what actually moved.
 }
 \description{
 Groups the dated files in a directory by stem and extension, keeps the most
 recent of each group where it is, and moves the rest into an \verb{old/}
-subdirectory. Prints the plan and touches nothing unless \code{dry_run = FALSE}.
+subdirectory. Prints the plan and asks before moving anything, then leaves a
+record of what it moved.
 }
 \details{
 This is the counterpart to \code{\link[=new_main]{new_main()}}'s write-only contract. Creating
@@ -51,8 +63,62 @@ outranks an unversioned one, whatever the dates say:
 
 That is deliberate. A version number is an explicit statement that one file
 supersedes another; a date only records when a file happened to be started.
-The consequence is worth knowing before you run this with \code{dry_run = FALSE},
-which is why the plan reports the version, date and time it sorted on.
+The consequence is worth knowing before you answer the prompt, which is why
+the plan reports the version, date and time it sorted on.
+}
+
+\section{Asking}{
+
+\code{action = "ask"} prints the plan and then asks \code{proceed? (Y/n)}. A bare
+Enter, \code{y}, \code{Y} or \code{yes} proceeds; \strong{everything else declines}, including
+input that is neither. There is one read and no loop, so ambiguity always
+resolves toward not moving, and a function that moves files can never sit
+holding the console.
+
+When there is no one to ask -- under \code{Rscript}, \code{knitr}, or \verb{R CMD check} --
+\code{"ask"} prints the plan, moves nothing, and says so. This is deliberately
+not an error: an unattended \code{retire()} should be inert rather than fatal,
+and it is the same outcome as \code{action = "plan"}.
+}
+
+\section{The migration log}{
+
+A real run that moves at least one file writes
+\verb{retire_migration_\{date\}_\{time\}.txt} into \verb{old/}, so a sweep can be undone
+by hand. Nothing is written by \code{"plan"}, by a declined prompt, or by a run
+that moved nothing -- a run that changes nothing leaves nothing behind, and
+that is what keeps a second run a no-op.
+
+The file is a \verb{#}-commented header followed by a two-column tab-separated
+table, so it reads either way:
+
+\preformatted{
+  # icu::retire() 2026-08-30 14:22:01
+  # swept: output/
+  # moved: 2  skipped: 1  failed: 0
+  # skipped (already in old/): figure_1a_2026-08-24.png
+  from	to
+  main_v1_2026-08-21.qmd	old/main_v1_2026-08-21.qmd
+  main_v2_2026-08-23.qmd	old/main_v2_2026-08-23.qmd
+}
+
+Only files that actually moved appear in the table, so every row of it is
+reversible with no filtering step:
+
+\preformatted{
+  m <- read.delim(log, comment.char = '#')
+  file.rename(file.path('output', m$to), file.path('output', m$from))
+}
+
+Skipped and failed files are named on the header lines instead, since they
+are the rows with nothing to undo but the most to explain. Paths are
+recorded relative to the swept directory, so moving the project does not
+invalidate the record.
+
+The log's own stem is in \code{ignore} by default, which is why sweeping an
+\verb{old/} directory does not sweep its logs. If writing it fails the failure is
+a warning, never an error: the files have already moved, and erroring would
+imply they had not.
 }
 
 \section{Never overwriting}{
@@ -83,15 +149,20 @@ file.create(file.path(dir, c(
   'notes.txt'
 )))
 
-# Prints the plan, moves nothing
-retire(dir)
+# Print the plan, move nothing
+retire(dir, action = 'plan')
 
-# Do it for real
-plan <- retire(dir, dry_run = FALSE)
+# Do it for real, without being asked
+plan <- retire(dir, action = 'move')
 plan$action
 
 list.files(dir)
 list.files(file.path(dir, 'old'))
+
+\dontrun{
+# The default prints the plan and then asks
+retire(dir)
+}
 
 unlink(dir, recursive = TRUE)
 

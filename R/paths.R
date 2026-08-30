@@ -302,12 +302,19 @@ parse_dated_filename <- function(file_name) {
 #'
 #' Groups the dated files in a directory by stem and extension, keeps the most
 #' recent of each group where it is, and moves the rest into an `old/`
-#' subdirectory. Prints the plan and touches nothing unless `dry_run = FALSE`.
+#' subdirectory. Prints the plan and asks before moving anything, then leaves a
+#' record of what it moved.
 #'
 #' @param path A single, non-`NA` character string naming an existing
 #'   directory: the directory to sweep. Defaults to the working directory.
-#' @param dry_run A single `TRUE`/`FALSE`: print the plan and move nothing.
-#'   Defaults to `TRUE`, so a bare `retire()` is always safe to type.
+#' @param action A single string, one of `"ask"`, `"plan"` or `"move"`.
+#'   `"ask"`, the default, prints the plan and then asks whether to proceed;
+#'   `"plan"` prints the plan and moves nothing; `"move"` moves without asking.
+#'   See the Asking section for what happens when there is no one to ask.
+#' @param ignore A character vector of stems that never participate in a
+#'   sweep. Defaults to `"retire_migration"`, the stem of the log described
+#'   below, so sweeping an `old/` directory leaves its own records alone. Pass
+#'   `character()` to sweep everything.
 #'
 #' @details
 #' This is the counterpart to [new_main()]'s write-only contract. Creating
@@ -333,8 +340,58 @@ parse_dated_filename <- function(file_name) {
 #'
 #' That is deliberate. A version number is an explicit statement that one file
 #' supersedes another; a date only records when a file happened to be started.
-#' The consequence is worth knowing before you run this with `dry_run = FALSE`,
-#' which is why the plan reports the version, date and time it sorted on.
+#' The consequence is worth knowing before you answer the prompt, which is why
+#' the plan reports the version, date and time it sorted on.
+#'
+#' @section Asking:
+#' `action = "ask"` prints the plan and then asks `proceed? (Y/n)`. A bare
+#' Enter, `y`, `Y` or `yes` proceeds; **everything else declines**, including
+#' input that is neither. There is one read and no loop, so ambiguity always
+#' resolves toward not moving, and a function that moves files can never sit
+#' holding the console.
+#'
+#' When there is no one to ask -- under `Rscript`, `knitr`, or `R CMD check` --
+#' `"ask"` prints the plan, moves nothing, and says so. This is deliberately
+#' not an error: an unattended `retire()` should be inert rather than fatal,
+#' and it is the same outcome as `action = "plan"`.
+#'
+#' @section The migration log:
+#' A real run that moves at least one file writes
+#' `retire_migration_{date}_{time}.txt` into `old/`, so a sweep can be undone
+#' by hand. Nothing is written by `"plan"`, by a declined prompt, or by a run
+#' that moved nothing -- a run that changes nothing leaves nothing behind, and
+#' that is what keeps a second run a no-op.
+#'
+#' The file is a `#`-commented header followed by a two-column tab-separated
+#' table, so it reads either way:
+#'
+#' \preformatted{
+#'   # icu::retire() 2026-08-30 14:22:01
+#'   # swept: output/
+#'   # moved: 2  skipped: 1  failed: 0
+#'   # skipped (already in old/): figure_1a_2026-08-24.png
+#'   from	to
+#'   main_v1_2026-08-21.qmd	old/main_v1_2026-08-21.qmd
+#'   main_v2_2026-08-23.qmd	old/main_v2_2026-08-23.qmd
+#' }
+#'
+#' Only files that actually moved appear in the table, so every row of it is
+#' reversible with no filtering step:
+#'
+#' \preformatted{
+#'   m <- read.delim(log, comment.char = '#')
+#'   file.rename(file.path('output', m$to), file.path('output', m$from))
+#' }
+#'
+#' Skipped and failed files are named on the header lines instead, since they
+#' are the rows with nothing to undo but the most to explain. Paths are
+#' recorded relative to the swept directory, so moving the project does not
+#' invalidate the record.
+#'
+#' The log's own stem is in `ignore` by default, which is why sweeping an
+#' `old/` directory does not sweep its logs. If writing it fails the failure is
+#' a warning, never an error: the files have already moved, and erroring would
+#' imply they had not.
 #'
 #' @section Never overwriting:
 #' If a file's name is already taken in `old/` -- possible when something was
@@ -359,6 +416,10 @@ parse_dated_filename <- function(file_name) {
 #'   rows. The parsed fields are carried so that a surprising decision can be
 #'   read off the plan rather than reconstructed.
 #'
+#'   The same frame comes back whatever `action` was and whatever you answered:
+#'   a `retire` row means the file lost its group, not that it moved. The log
+#'   in `old/` is the on-disk record of what actually moved.
+#'
 #' @examples
 #' dir <- tempfile()
 #' dir.create(dir)
@@ -369,28 +430,38 @@ parse_dated_filename <- function(file_name) {
 #'   'notes.txt'
 #' )))
 #'
-#' # Prints the plan, moves nothing
-#' retire(dir)
+#' # Print the plan, move nothing
+#' retire(dir, action = 'plan')
 #'
-#' # Do it for real
-#' plan <- retire(dir, dry_run = FALSE)
+#' # Do it for real, without being asked
+#' plan <- retire(dir, action = 'move')
 #' plan$action
 #'
 #' list.files(dir)
 #' list.files(file.path(dir, 'old'))
 #'
+#' \dontrun{
+#' # The default prints the plan and then asks
+#' retire(dir)
+#' }
+#'
 #' unlink(dir, recursive = TRUE)
 #'
 #' @export
-retire <- function(path = '.', dry_run = TRUE) {
+retire <- function(path = '.', action = 'ask', ignore = 'retire_migration') {
 
   stopifnot(
-    'path must be length 1'              = length(path) == 1,
-    'path must be character'             = is.character(path),
-    'path must not be NA'                = !is.na(path),
-    'path must be an existing directory' = dir.exists(path),
-    'dry_run must be length 1'           = length(dry_run) == 1,
-    'dry_run must be TRUE or FALSE'      = is.logical(dry_run) && !is.na(dry_run)
+    'path must be length 1'                   = length(path) == 1,
+    'path must be character'                  = is.character(path),
+    'path must not be NA'                     = !is.na(path),
+    'path must be an existing directory'      = dir.exists(path),
+    'action must be length 1'                 = length(action) == 1,
+    'action must be character'                = is.character(action),
+    'action must not be NA'                   = !is.na(action),
+    'action must be one of ask, plan or move' =
+      action %in% c('ask', 'plan', 'move'),
+    'ignore must be character'                = is.character(ignore),
+    'ignore must not be NA'                   = !anyNA(ignore)
   )
 
   old_dir <- file.path(path, 'old')
@@ -402,7 +473,14 @@ retire <- function(path = '.', dry_run = TRUE) {
   # perfectly parseable *directory* name, and list.files() returns directories
   # alongside files -- so without this, retire() would rename a folder. It is
   # also what keeps old/ itself out of its own sweep.
-  participates <- parsed$parsed & !dir.exists(full)
+  #
+  # `ignore` is the third exclusion, and the only one by name: it is how the
+  # migration log written below stays out of a sweep of the directory it lives
+  # in, without needing a filename that deliberately breaks the grammar.
+  participates <-
+    parsed$parsed &
+    !dir.exists(full) &
+    !(parsed$stem %in% ignore)
 
   plan <- data.frame(
     path        = full,
@@ -498,7 +576,9 @@ retire <- function(path = '.', dry_run = TRUE) {
     return(invisible(plan))
   }
 
-  if (dry_run) {
+  # 'move' is the only action that does not show the plan first: you asked for
+  # the sweep, not for a report on it
+  if (action != 'move') {
     shown <- plan[plan$action != 'ignored', ]
 
     cat('retire plan for ', path, '\n', sep = '')
@@ -509,18 +589,50 @@ retire <- function(path = '.', dry_run = TRUE) {
     if (ignored > 0) {
       cat('  ', ignored, ' not recognized\n', sep = '')
     }
+  }
 
+  # Shared by both ways of stopping short of the move, so the two lines cannot
+  # drift apart
+  count <- paste0(
+    length(moving), if (length(moving) == 1) ' file' else ' files',
+    ' to ', old_dir
+  )
+
+  if (action == 'plan') {
     cat(
-      'dry run: nothing moved; re-run with dry_run = FALSE to move ',
-      length(moving), if (length(moving) == 1) ' file' else ' files',
-      ' to ', old_dir, '\n',
+      'plan only: nothing moved; re-run with action = "move" to move ',
+      count, '\n',
       sep = ''
     )
 
     return(invisible(plan))
   }
 
-  # Only now, and never on a dry run: creating old/ is touching the directory
+  if (action == 'ask') {
+
+    # Through a wrapper, never interactive() inline: it reports on the session
+    # rather than the call stack, so it is TRUE when devtools::test() runs from
+    # a console and this branch would block the suite on a prompt nothing
+    # answers. Same seam, same reason, as rstudio_available().
+    if (!interactive_session()) {
+      cat(
+        'not an interactive session: nothing moved; ',
+        're-run with action = "move" to move ', count, '\n',
+        sep = ''
+      )
+
+      return(invisible(plan))
+    }
+
+    if (!ask_yes_no('proceed? (Y/n) ')) {
+      cat('declined: nothing moved\n')
+
+      return(invisible(plan))
+    }
+  }
+
+  # Only now, and never before the answer: creating old/ is touching the
+  # directory
   if (!dir.exists(old_dir)) {
     dir.create(old_dir)
   }
@@ -542,5 +654,128 @@ retire <- function(path = '.', dry_run = TRUE) {
     sep = ''
   )
 
+  # A run that moved nothing writes nothing, which is what keeps a second run a
+  # no-op. Moves that failed are already reported by the warning above.
+  if (any(moved)) {
+    log_file <- write_migration_log(
+      path    = path,
+      old_dir = old_dir,
+      from    = basename(plan$path[moving][moved]),
+      skipped = basename(plan$path[skipped]),
+      failed  = basename(plan$path[moving][!moved])
+    )
+
+    # Named on its own line rather than appended: an undo record you have to
+    # know about is one you will not use, and the path is there to be copied
+    if (!is.na(log_file)) {
+      cat('log: ', log_file, '\n', sep = '')
+    }
+  }
+
   invisible(plan)
+}
+
+
+# --- Asking, and the record left behind --------------------------------------
+
+# Whether there is a human at the console to answer a prompt. A wrapper rather
+# than the call written inline, for the same reason rstudio_available() is one:
+# interactive() reports on the *session*, not the call stack, so it is TRUE
+# when devtools::test() is run from a console. A bare retire() in the suite
+# would take the asking branch for real and block forever. interactive() is
+# also a primitive and cannot be mocked directly, so this binding is the only
+# seam the tests have.
+interactive_session <- function() {
+  interactive()
+}
+
+# One read, no loop. The parsing is split out so it can be tested without
+# mocking base::readline(); this half is the seam retire()'s tests mock.
+ask_yes_no <- function(prompt) {
+  is_yes(readline(prompt))
+}
+
+# Enter, y, Y or yes proceeds; everything else declines, including input that
+# is neither. Ambiguity resolves toward not moving: a slip costs one retyped
+# call, and the alternative costs a sweep you did not agree to.
+is_yes <- function(answer) {
+  answer <- trimws(answer)
+
+  !nzchar(answer) || tolower(answer) %in% c('y', 'yes')
+}
+
+# The record retire() leaves behind, so a sweep can be undone by hand.
+#
+# The name is built with dtp() rather than assembled here, because the
+# {stem}_{date}_{time}.{ext} grammar lives in one place -- and the header's
+# timestamp is then read back out of that name with parse_dated_filename(),
+# rather than formatted from a second clock reading that could disagree with it
+# across a second boundary.
+#
+# Paths are recorded relative to the swept directory: absolute ones would break
+# the moment the project moved, and the sweep is per-directory anyway, so the
+# basename is the whole story.
+write_migration_log <- function(path, old_dir, from, skipped, failed) {
+
+  name <- dtp('retire_migration.txt')
+  file <- file.path(old_dir, name)
+
+  stamp <- parse_dated_filename(name)
+  when  <- paste(stamp$date, gsub('-', ':', stamp$time))
+
+  header <- c(
+    paste0('# icu::retire() ', when),
+    paste0('# swept: ', path),
+    paste0(
+      '# moved: ', length(from),
+      '  skipped: ', length(skipped),
+      '  failed: ', length(failed)
+    )
+  )
+
+  # Named, not merely counted: "skipped: 1" names no file six months later,
+  # and these are the rows with nothing to undo but the most to explain. The
+  # lines are omitted entirely when empty, so the usual log is a three-line
+  # header and a table.
+  if (length(skipped) > 0) {
+    header <- c(
+      header,
+      paste0('# skipped (already in old/): ', paste(skipped, collapse = ', '))
+    )
+  }
+
+  if (length(failed) > 0) {
+    header <- c(
+      header,
+      paste0('# failed: ', paste(failed, collapse = ', '))
+    )
+  }
+
+  # Only moves go in the table, so every row of it is reversible without a
+  # filtering step -- and a filter that gets forgotten is a rename attempted
+  # against a file that never moved
+  lines <- c(
+    header,
+    paste('from', 'to', sep = '\t'),
+    paste(from, file.path('old', from), sep = '\t')
+  )
+
+  written <- tryCatch(
+    {
+      writeLines(lines, file)
+      TRUE
+    },
+    error   = function(e) FALSE,
+    warning = function(w) FALSE
+  )
+
+  # The files have already moved by the time this runs, so a failure here is a
+  # warning: erroring would imply they had not
+  if (!written) {
+    warning('could not write the migration log to ', file)
+
+    return(NA_character_)
+  }
+
+  file
 }

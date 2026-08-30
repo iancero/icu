@@ -414,7 +414,7 @@ test_that("a non-character file_name is rejected", {
 # retire() moves files, so every test below works in its own temp directory.
 #
 # It also cat()s its plan. Tests that are not about the printing wrap the call
-# in quietly() to keep the suite readable; the two that are about it use
+# in quietly() to keep the suite readable; the ones that are about it use
 # expect_output() instead.
 #
 # Dates here are fixed rather than taken from the clock: retire() reads them
@@ -422,6 +422,18 @@ test_that("a non-character file_name is rejected", {
 
 local_swept_dir <- function(files = character(), dirs = character(),
                             env = parent.frame()) {
+  # interactive() is TRUE when the suite is run from a console, so the default
+  # action = 'ask' would reach a real prompt and wait forever for an answer
+  # nothing is going to give it. The mock is folded into the fixture so it
+  # cannot be forgotten, exactly as test-project.R folds rstudio_available()
+  # into local_projects_dir(). The tests that are about the prompt override
+  # these two bindings themselves.
+  testthat::local_mocked_bindings(
+    interactive_session = function() FALSE,
+    ask_yes_no = function(prompt) stop('the prompt should not be reached here'),
+    .env = env
+  )
+
   dir <- tempfile()
   dir.create(dir)
 
@@ -460,6 +472,23 @@ swept_files <- c(
 
 survivors <- function(plan) {
   sort(basename(plan$path[plan$action == "keep"]))
+}
+
+# old/ holds one migration log per real run alongside the retired files. Tests
+# that are about the files filter it out here rather than each in turn; tests
+# that are about the log ask for it by name.
+retired_in <- function(dir) {
+  found <- list.files(file.path(dir, "old"))
+
+  sort(found[!grepl("^retire_migration_", found)])
+}
+
+log_in <- function(dir) {
+  list.files(
+    file.path(dir, "old"),
+    pattern    = "^retire_migration_",
+    full.names = TRUE
+  )
 }
 
 # --- retire(): grouping and ordering ----------------------------------------
@@ -534,10 +563,10 @@ test_that("a group of one is kept, not retired", {
 test_that("a real run moves the retired files and leaves the rest", {
   dir <- local_swept_dir(swept_files)
 
-  quietly(retire(dir, dry_run = FALSE))
+  quietly(retire(dir, action = "move"))
 
   expect_identical(
-    sort(list.files(file.path(dir, "old"))),
+    retired_in(dir),
     sort(c(
       "main_v1_2026-08-21.qmd",
       "main_v2_2026-08-23.qmd",
@@ -548,11 +577,11 @@ test_that("a real run moves the retired files and leaves the rest", {
   expect_true(file.exists(file.path(dir, "main_v3_2026-08-22.qmd")))
 })
 
-test_that("a dry run touches nothing, and creates no old/", {
+test_that("a plan run touches nothing, and creates no old/", {
   dir    <- local_swept_dir(swept_files)
   before <- sort(list.files(dir))
 
-  quietly(retire(dir))
+  quietly(retire(dir, action = "plan"))
 
   expect_identical(sort(list.files(dir)), before)
   expect_false(dir.exists(file.path(dir, "old")))
@@ -561,32 +590,232 @@ test_that("a dry run touches nothing, and creates no old/", {
 test_that("a second run is a no-op", {
   dir <- local_swept_dir(swept_files)
 
-  quietly(retire(dir, dry_run = FALSE))
+  quietly(retire(dir, action = "move"))
   after_first <- sort(list.files(dir, recursive = TRUE))
 
-  quietly(retire(dir, dry_run = FALSE))
+  quietly(retire(dir, action = "move"))
 
+  # This is what pins "the log is written only when something actually moved":
+  # a second run that moves nothing must also write nothing, or the tree grows
+  # a file per run forever and idempotency is gone
   expect_identical(sort(list.files(dir, recursive = TRUE)), after_first)
 })
 
 test_that("a real run reports what it moved", {
   dir <- local_swept_dir(swept_files)
 
-  expect_output(retire(dir, dry_run = FALSE), "retired 4 files to")
+  expect_output(retire(dir, action = "move"), "retired 4 files to")
 })
 
 test_that("the count in the closing line is singular when it should be", {
   dir <- local_swept_dir(c("main_v1_2026-08-21.qmd", "main_v2_2026-08-22.qmd"))
 
   # Reads as prose or it does not get read at all
-  expect_output(retire(dir, dry_run = FALSE), "retired 1 file to")
+  expect_output(retire(dir, action = "move"), "retired 1 file to")
 })
 
 test_that("nothing to retire says so, and creates no old/", {
   dir <- local_swept_dir("main_v1_2026-08-21.qmd")
 
-  expect_output(retire(dir, dry_run = FALSE), "nothing to retire in")
+  expect_output(retire(dir, action = "move"), "nothing to retire in")
   expect_false(dir.exists(file.path(dir, "old")))
+})
+
+test_that("a plan run says how to do it for real", {
+  dir <- local_swept_dir(swept_files)
+
+  expect_output(
+    retire(dir, action = "plan"),
+    'plan only: nothing moved; re-run with action = "move" to move 4 files'
+  )
+})
+
+# --- retire(): asking -------------------------------------------------------
+
+test_that("yes at the prompt moves the files", {
+  dir <- local_swept_dir(swept_files)
+
+  local_mocked_bindings(
+    interactive_session = function() TRUE,
+    ask_yes_no          = function(prompt) TRUE
+  )
+
+  quietly(retire(dir))
+
+  expect_true(file.exists(file.path(dir, "old", "main_v1_2026-08-21.qmd")))
+})
+
+test_that("no at the prompt touches nothing", {
+  dir    <- local_swept_dir(swept_files)
+  before <- sort(list.files(dir))
+
+  local_mocked_bindings(
+    interactive_session = function() TRUE,
+    ask_yes_no          = function(prompt) FALSE
+  )
+
+  expect_output(retire(dir), "declined: nothing moved")
+
+  expect_identical(sort(list.files(dir)), before)
+  expect_false(dir.exists(file.path(dir, "old")))
+})
+
+test_that("a declined run returns what a plan run returns", {
+  dir <- local_swept_dir(swept_files)
+
+  planned <- quietly(retire(dir, action = "plan"))
+
+  local_mocked_bindings(
+    interactive_session = function() TRUE,
+    ask_yes_no          = function(prompt) FALSE
+  )
+
+  # A `retire` row means the file lost its group, not that it moved -- so a
+  # declined sweep and a plan run are the same frame, by design
+  expect_identical(quietly(retire(dir)), planned)
+})
+
+test_that("no one to ask means the plan, and nothing moved", {
+  dir <- local_swept_dir(swept_files)
+
+  # The fixture mocks the session as non-interactive, which is what Rscript,
+  # knitr and R CMD check all really are
+  expect_output(retire(dir), "not an interactive session: nothing moved")
+  expect_false(dir.exists(file.path(dir, "old")))
+})
+
+test_that("the prompt is never reached when there is nothing to move", {
+  dir <- local_swept_dir("main_v1_2026-08-21.qmd")
+
+  # The fixture's ask_yes_no() stops the test if it is called at all
+  local_mocked_bindings(interactive_session = function() TRUE)
+
+  expect_output(retire(dir), "nothing to retire in")
+})
+
+test_that("Enter, y and yes proceed; everything else declines", {
+  expect_true(is_yes(""))
+  expect_true(is_yes("y"))
+  expect_true(is_yes("Y"))
+  expect_true(is_yes("yes"))
+  expect_true(is_yes("  y  "))
+
+  expect_false(is_yes("n"))
+  expect_false(is_yes("no"))
+
+  # Unrecognized input declines rather than re-asking: ambiguity resolves
+  # toward not moving, and a slip costs one retyped call
+  expect_false(is_yes("asdf"))
+  expect_false(is_yes("yep"))
+})
+
+# --- retire(): the migration log --------------------------------------------
+
+test_that("a real run writes exactly one log into old/", {
+  dir <- local_swept_dir(swept_files)
+
+  quietly(retire(dir, action = "move"))
+
+  expect_length(log_in(dir), 1)
+})
+
+test_that("the log's table round-trips through read.delim()", {
+  dir <- local_swept_dir(swept_files)
+
+  quietly(retire(dir, action = "move"))
+
+  moves <- utils::read.delim(log_in(dir), comment.char = "#")
+
+  expect_identical(names(moves), c("from", "to"))
+  expect_identical(
+    sort(moves$from),
+    sort(c(
+      "main_v1_2026-08-21.qmd",
+      "main_v2_2026-08-23.qmd",
+      "figure_1a_2026-08-24.png",
+      "figure_1b_2026-08-23.png"
+    ))
+  )
+
+  # Relative to the swept directory: absolute paths would break the moment the
+  # project moved
+  expect_identical(moves$to, file.path("old", moves$from))
+})
+
+test_that("a skipped file is named in the header and absent from the table", {
+  dir <- local_swept_dir(swept_files, dirs = "old")
+  file.create(file.path(dir, "old", "main_v1_2026-08-21.qmd"))
+
+  suppressWarnings(quietly(retire(dir, action = "move")))
+
+  header <- paste(grep("^#", readLines(log_in(dir)), value = TRUE), collapse = "\n")
+  moves  <- utils::read.delim(log_in(dir), comment.char = "#")
+
+  expect_match(header, "moved: 3  skipped: 1  failed: 0", fixed = TRUE)
+  expect_match(header, "skipped \\(already in old/\\): main_v1_2026-08-21[.]qmd")
+
+  # Nothing to undo, so it is not a row: every row of the table is reversible
+  expect_false("main_v1_2026-08-21.qmd" %in% moves$from)
+})
+
+test_that("the header omits the skipped and failed lines when there are none", {
+  dir <- local_swept_dir(swept_files)
+
+  quietly(retire(dir, action = "move"))
+
+  header <- grep("^#", readLines(log_in(dir)), value = TRUE)
+
+  expect_length(header, 3)
+  expect_match(header[2], "# swept: ", fixed = TRUE)
+  expect_false(any(grepl("skipped \\(", header)))
+  expect_false(any(grepl("^# failed", header)))
+})
+
+test_that("the header's timestamp agrees with the log's file name", {
+  dir <- local_swept_dir(swept_files)
+
+  quietly(retire(dir, action = "move"))
+
+  file  <- log_in(dir)
+  stamp <- parse_dated_filename(basename(file))
+
+  # Read back out of the name rather than formatted from a second clock
+  # reading, so the two cannot disagree across a second boundary
+  expect_identical(
+    readLines(file)[1],
+    paste0("# icu::retire() ", stamp$date, " ", gsub("-", ":", stamp$time))
+  )
+})
+
+test_that("no log is written by a plan run, a decline, or a run that moved nothing", {
+  planned <- local_swept_dir(swept_files)
+
+  quietly(retire(planned, action = "plan"))
+
+  expect_length(log_in(planned), 0)
+
+  declined <- local_swept_dir(swept_files)
+
+  local_mocked_bindings(
+    interactive_session = function() TRUE,
+    ask_yes_no          = function(prompt) FALSE
+  )
+
+  quietly(retire(declined))
+
+  expect_length(log_in(declined), 0)
+
+  nothing <- local_swept_dir("main_v1_2026-08-21.qmd")
+
+  quietly(retire(nothing, action = "move"))
+
+  expect_length(log_in(nothing), 0)
+})
+
+test_that("the closing line names the log", {
+  dir <- local_swept_dir(swept_files)
+
+  expect_output(retire(dir, action = "move"), "log: .*retire_migration_")
 })
 
 # --- retire(): never overwriting --------------------------------------------
@@ -596,7 +825,7 @@ test_that("a name already taken in old/ is skipped, not clobbered", {
   file.create(file.path(dir, "old", "main_v1_2026-08-21.qmd"))
 
   expect_warning(
-    quietly(retire(dir, dry_run = FALSE)),
+    quietly(retire(dir, action = "move")),
     "skipped: main_v1_2026-08-21[.]qmd"
   )
 
@@ -607,18 +836,18 @@ test_that("a collision does not stop the rest of the sweep", {
   dir <- local_swept_dir(swept_files, dirs = "old")
   file.create(file.path(dir, "old", "main_v1_2026-08-21.qmd"))
 
-  suppressWarnings(quietly(retire(dir, dry_run = FALSE)))
+  suppressWarnings(quietly(retire(dir, action = "move")))
 
   # Everything except the collided file still moved
   expect_true(file.exists(file.path(dir, "old", "main_v2_2026-08-23.qmd")))
   expect_true(file.exists(file.path(dir, "old", "figure_1a_2026-08-24.png")))
 })
 
-test_that("a collision shows on the dry run, before anything moves", {
+test_that("a collision shows on the plan, before anything moves", {
   dir <- local_swept_dir(swept_files, dirs = "old")
   file.create(file.path(dir, "old", "main_v1_2026-08-21.qmd"))
 
-  plan <- suppressWarnings(quietly(retire(dir)))
+  plan <- suppressWarnings(quietly(retire(dir, action = "plan")))
 
   expect_identical(
     basename(plan$path[plan$action == "skipped"]),
@@ -631,7 +860,7 @@ test_that("a collision shows on the dry run, before anything moves", {
 test_that("a near-miss name is left alone and reported as ignored", {
   dir <- local_swept_dir(swept_files)
 
-  plan <- quietly(retire(dir, dry_run = FALSE))
+  plan <- quietly(retire(dir, action = "move"))
 
   # An underscore in the date: strict matching means it is never reinterpreted
   expect_true(file.exists(file.path(dir, "figure_1a_2026_08-22.png")))
@@ -643,7 +872,7 @@ test_that("a near-miss name is left alone and reported as ignored", {
 
 test_that("an undated file never participates", {
   dir  <- local_swept_dir(swept_files)
-  plan <- quietly(retire(dir, dry_run = FALSE))
+  plan <- quietly(retire(dir, action = "move"))
 
   expect_true(file.exists(file.path(dir, "notes.txt")))
   expect_identical(
@@ -658,7 +887,7 @@ test_that("a directory named like a dated file is never moved", {
     dirs = "analysis_2026-08-23.old"
   )
 
-  plan <- quietly(retire(dir, dry_run = FALSE))
+  plan <- quietly(retire(dir, action = "move"))
 
   expect_true(dir.exists(file.path(dir, "analysis_2026-08-23.old")))
   expect_identical(
@@ -670,10 +899,56 @@ test_that("a directory named like a dated file is never moved", {
 test_that("old/ does not sweep itself", {
   dir <- local_swept_dir(swept_files)
 
-  quietly(retire(dir, dry_run = FALSE))
-  quietly(retire(dir, dry_run = FALSE))
+  quietly(retire(dir, action = "move"))
+  quietly(retire(dir, action = "move"))
 
   expect_false(dir.exists(file.path(dir, "old", "old")))
+})
+
+test_that("a stem in ignore never participates", {
+  dir <- local_swept_dir(
+    c(swept_files, "draft_2026-08-21.qmd", "draft_2026-08-22.qmd")
+  )
+
+  plan   <- quietly(retire(dir, action = "move", ignore = "draft"))
+  drafts <- plan[grepl("^draft_", basename(plan$path)), ]
+
+  expect_identical(unique(drafts$action), "ignored")
+  expect_true(all(file.exists(file.path(dir, basename(drafts$path)))))
+})
+
+test_that("an ignored-by-name row carries no parsed fields", {
+  dir <- local_swept_dir(c("draft_2026-08-21.qmd", "draft_2026-08-22.qmd"))
+
+  plan <- quietly(retire(dir, action = "move", ignore = "draft"))
+
+  # Same rule as a name that never parsed: a row that did not participate
+  # cannot be mistaken for one that was weighed and lost
+  expect_true(all(is.na(plan$stem)))
+  expect_true(all(is.na(plan$date)))
+})
+
+test_that("retire() never sweeps its own logs", {
+  dir <- local_swept_dir(c(
+    "retire_migration_2026-08-30_14-22-01.txt",
+    "retire_migration_2026-08-31_09-15-33.txt"
+  ))
+
+  plan <- quietly(retire(dir, action = "move"))
+
+  expect_identical(unique(plan$action), "ignored")
+  expect_false(dir.exists(file.path(dir, "old")))
+})
+
+test_that("ignore = character() sweeps the logs like anything else", {
+  dir <- local_swept_dir(c(
+    "retire_migration_2026-08-30_14-22-01.txt",
+    "retire_migration_2026-08-31_09-15-33.txt"
+  ))
+
+  plan <- quietly(retire(dir, action = "move", ignore = character()))
+
+  expect_identical(survivors(plan), "retire_migration_2026-08-31_09-15-33.txt")
 })
 
 # --- retire(): the plan -----------------------------------------------------
@@ -747,18 +1022,39 @@ test_that("invalid path is rejected", {
   )
 })
 
-test_that("invalid dry_run is rejected", {
+test_that("invalid action is rejected", {
   dir <- local_swept_dir(swept_files)
 
-  expect_error(retire(dir, dry_run = c(TRUE, TRUE)), "dry_run must be length 1")
-  expect_error(retire(dir, dry_run = "yes"), "dry_run must be TRUE or FALSE")
-  expect_error(retire(dir, dry_run = NA), "dry_run must be TRUE or FALSE")
+  expect_error(retire(dir, action = c("ask", "ask")), "action must be length 1")
+  expect_error(retire(dir, action = 1), "action must be character")
+  expect_error(retire(dir, action = NA_character_), "action must not be NA")
+  expect_error(
+    retire(dir, action = "sweep"),
+    "action must be one of ask, plan or move"
+  )
+})
+
+test_that("invalid ignore is rejected", {
+  dir <- local_swept_dir(swept_files)
+
+  expect_error(retire(dir, ignore = 1), "ignore must be character")
+  expect_error(retire(dir, ignore = NA_character_), "ignore must not be NA")
+  expect_error(
+    retire(dir, ignore = c("main", NA_character_)),
+    "ignore must not be NA"
+  )
+})
+
+test_that("an empty ignore is allowed", {
+  dir <- local_swept_dir(swept_files)
+
+  expect_no_error(quietly(retire(dir, action = "plan", ignore = character())))
 })
 
 test_that("nothing is moved when validation fails", {
   dir <- local_swept_dir(swept_files)
 
-  expect_error(retire(dir, dry_run = "yes"))
+  expect_error(retire(dir, action = "sweep"))
 
   expect_identical(sort(list.files(dir)), sort(swept_files))
   expect_false(dir.exists(file.path(dir, "old")))
