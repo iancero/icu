@@ -82,3 +82,18 @@ formatted is part of the same conversation.
   ([../ideas/done/project-scaffold.md](../ideas/done/project-scaffold.md)
   — shipped 2026-08-23), so whatever this file says is what every future
   project starts from.
+- **An "AI context lessons" document exists outside this repo** (drafted
+  2026-08-26): lessons-learned plus global-context material, written up
+  with icu implications in mind, and intended as design input for exactly
+  this decision. It is *not* in the repo and its content is not
+  summarized here, deliberately — the point of the pointer is to stop
+  this chore being worked from the repo alone, the way the current master
+  was.
+
+  One flag carried over with the pointer: that draft was reported to
+  **contradict settled icu decisions** in at least three places — flat
+  `data/`, no git, and html reports. Whoever picks this up should
+  reconcile rather than adopt, and treat a conflict as a question for
+  Ian, not as evidence the shipped decision was wrong.
+- [main-template-formats.md](main-template-formats.md) item (4) edits the
+  same paragraphs of the master. If both are worked, do them together.

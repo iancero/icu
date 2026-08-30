@@ -120,6 +120,17 @@ chore on the test side:
   PATH, icu installed); a Typst render adds no new external dependency,
   since quarto ships Typst — but it does add wall-clock to the one test
   that already costs ~10s.
+
+  **This test under-asserts today, before any format change.** It greps
+  the rendered html for `Session info` and stops there — it never checks
+  that the hook's `<details>` / `<summary>` wrapper came through as
+  *markup* rather than as literal escaped text. A hook that emitted the
+  tags as a character string, or a pandoc setting that escaped them,
+  would produce a document with the heading present, the collapse broken,
+  and a passing test. Worth adding an assertion on the rendered
+  `<details>` element whether or not the format set changes; it is the
+  cheap half of what (1) needs anyway, and it establishes the per-format
+  assertion shape before there are three formats to write it for.
 - **test-document.R:181** "a rendered sibling does not push the version
   along" — see (5) above.
 

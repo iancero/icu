@@ -58,17 +58,41 @@ Implementation wave, in order. Steps 1 and 2 are done:
 anything else any more; what remains is independent, and none of it is a
 commitment.
 
-Independent, any time: **icu-setup.md** (now the only consumer of
-`icu.projects_dir`'s story — see the note above).
+Independent, any time:
 
-Deliberately backlog, not in the wave: **codebook-md.md**, then
-**synthetic-data.md** (downstream of codebook — consumes its schema, never
-the data).
+- **icu-setup.md** — now the only consumer of `icu.projects_dir`'s story
+  (see the note above). Whether it still earns its keep with one option
+  left is recorded as an open question inside the file itself.
+- **inc-version.md** — `inc_version()` / `new_version()`: save-as-increment
+  for the active file, automating the one lifecycle step still done by
+  hand-typing a filename. Would be the grammar's **third** consumer.
+  Design discussion needed, though retire()'s ordering decision already
+  resolved its date-refresh question.
+
+That bullet was drafted 2026-08-26 in a conversation whose files never
+reached this repo, alongside reexport-lubridate.md — shipped 2026-08-30,
+see done/ — and claude-project-instructions.md below. All three were
+recovered and reconciled against the shipped package on 2026-08-30 — their
+cross-references point at what was actually decided, not at the proposals
+current when they were written.
+
+Deliberately backlog, not in the wave: **codebook-md.md** first, then its
+two downstream items, which are independent of each other:
+
+- **synthetic-data.md** — consumes codebook's schema, never the data.
+- **claude-project-instructions.md** — takes the redacted codebook as one
+  input. Recovered 2026-08-30 from the same off-repo drafting
+  conversation as inc-version.md; reconciled, and still **design
+  discussion needed** on every substantive choice.
+
+Nothing in that group can start before codebook_md() is designed, and
+codebook-md.md is itself at design-discussion stage.
 
 Shipped: dated-path (`dated_path()` + shorthands), round-cols-default
 (`digits = 3`), new-main (`new_main()` + internal `parse_dated_filename()`),
 meeting (`meeting()` + internal `meeting_block()`), conventions-md
 (`conventions_md()`), project-scaffold (`new_project()` + internal
-`projects_dir()`), retire (`retire()`, the grammar's second consumer) — see
-done/. Superseded: qmd-creator.md was replaced wholesale by
-new-main.md (2026-08-23) and is gone.
+`projects_dir()`), retire (`retire()`, the grammar's second consumer),
+reexport-glue (`glue()`) and reexport-lubridate (`today()` + `now()`, which
+put lubridate in Imports) — see done/. Superseded: qmd-creator.md was
+replaced wholesale by new-main.md (2026-08-23) and is gone.
