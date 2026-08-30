@@ -407,3 +407,359 @@ test_that("dated_path() output parses back under the grammar", {
 test_that("a non-character file_name is rejected", {
   expect_error(parse_dated_filename(1), "file_name must be character")
 })
+
+
+# --- retire(): how these tests are set up -----------------------------------
+
+# retire() moves files, so every test below works in its own temp directory.
+#
+# It also cat()s its plan. Tests that are not about the printing wrap the call
+# in quietly() to keep the suite readable; the two that are about it use
+# expect_output() instead.
+#
+# Dates here are fixed rather than taken from the clock: retire() reads them
+# out of file names and never asks what today is.
+
+local_swept_dir <- function(files = character(), dirs = character(),
+                            env = parent.frame()) {
+  dir <- tempfile()
+  dir.create(dir)
+
+  withr::defer(unlink(dir, recursive = TRUE), envir = env)
+
+  if (length(files) > 0) {
+    file.create(file.path(dir, files))
+  }
+
+  for (d in dirs) {
+    dir.create(file.path(dir, d))
+  }
+
+  dir
+}
+
+quietly <- function(expr) {
+  capture.output(value <- expr)
+  value
+}
+
+# The motivating example from the design file, plus the three cases the
+# ordering rule turns on: a version that disagrees with its date, a versioned
+# file beside an unversioned one, and a timed name beside a timeless one.
+swept_files <- c(
+  "main_v1_2026-08-21.qmd",
+  "main_v2_2026-08-23.qmd",
+  "main_v3_2026-08-22.qmd",
+  "figure_1a_v2_2026-08-23.png",
+  "figure_1a_2026-08-24.png",
+  "figure_1b_2026-08-23.png",
+  "figure_1b_2026-08-23_14-30-00.png",
+  "figure_1a_2026_08-22.png",
+  "notes.txt"
+)
+
+survivors <- function(plan) {
+  sort(basename(plan$path[plan$action == "keep"]))
+}
+
+# --- retire(): grouping and ordering ----------------------------------------
+
+test_that("one file of each group survives, and it is the newest", {
+  dir  <- local_swept_dir(swept_files)
+  plan <- quietly(retire(dir))
+
+  expect_identical(
+    survivors(plan),
+    sort(c(
+      "main_v3_2026-08-22.qmd",
+      "figure_1a_v2_2026-08-23.png",
+      "figure_1b_2026-08-23_14-30-00.png"
+    ))
+  )
+})
+
+test_that("version outranks date", {
+  dir  <- local_swept_dir(c("main_v3_2026-08-22.qmd", "main_v2_2026-08-23.qmd"))
+  plan <- quietly(retire(dir))
+
+  # Date-first was the rejected rule, and would keep v2 here
+  expect_identical(survivors(plan), "main_v3_2026-08-22.qmd")
+})
+
+test_that("a versioned file outranks an unversioned one, whatever the dates", {
+  dir <- local_swept_dir(c(
+    "figure_1a_v2_2026-08-23.png",
+    "figure_1a_2026-08-24.png"
+  ))
+  plan <- quietly(retire(dir))
+
+  # Grouping is (stem, ext) and nothing else, so these compete -- and the
+  # unversioned file loses despite being a day newer
+  expect_identical(survivors(plan), "figure_1a_v2_2026-08-23.png")
+})
+
+test_that("a missing time segment sorts older than a present one", {
+  dir <- local_swept_dir(c(
+    "figure_1b_2026-08-23.png",
+    "figure_1b_2026-08-23_14-30-00.png"
+  ))
+  plan <- quietly(retire(dir))
+
+  expect_identical(survivors(plan), "figure_1b_2026-08-23_14-30-00.png")
+})
+
+test_that("the same stem with different extensions makes separate groups", {
+  dir <- local_swept_dir(c(
+    "main_v1_2026-08-21.qmd",
+    "main_v2_2026-08-22.qmd",
+    "main_v1_2026-08-21.html"
+  ))
+  plan <- quietly(retire(dir))
+
+  expect_identical(
+    survivors(plan),
+    sort(c("main_v2_2026-08-22.qmd", "main_v1_2026-08-21.html"))
+  )
+})
+
+test_that("a group of one is kept, not retired", {
+  dir  <- local_swept_dir("main_v1_2026-08-21.qmd")
+  plan <- quietly(retire(dir))
+
+  expect_identical(plan$action, "keep")
+})
+
+# --- retire(): moving -------------------------------------------------------
+
+test_that("a real run moves the retired files and leaves the rest", {
+  dir <- local_swept_dir(swept_files)
+
+  quietly(retire(dir, dry_run = FALSE))
+
+  expect_identical(
+    sort(list.files(file.path(dir, "old"))),
+    sort(c(
+      "main_v1_2026-08-21.qmd",
+      "main_v2_2026-08-23.qmd",
+      "figure_1a_2026-08-24.png",
+      "figure_1b_2026-08-23.png"
+    ))
+  )
+  expect_true(file.exists(file.path(dir, "main_v3_2026-08-22.qmd")))
+})
+
+test_that("a dry run touches nothing, and creates no old/", {
+  dir    <- local_swept_dir(swept_files)
+  before <- sort(list.files(dir))
+
+  quietly(retire(dir))
+
+  expect_identical(sort(list.files(dir)), before)
+  expect_false(dir.exists(file.path(dir, "old")))
+})
+
+test_that("a second run is a no-op", {
+  dir <- local_swept_dir(swept_files)
+
+  quietly(retire(dir, dry_run = FALSE))
+  after_first <- sort(list.files(dir, recursive = TRUE))
+
+  quietly(retire(dir, dry_run = FALSE))
+
+  expect_identical(sort(list.files(dir, recursive = TRUE)), after_first)
+})
+
+test_that("a real run reports what it moved", {
+  dir <- local_swept_dir(swept_files)
+
+  expect_output(retire(dir, dry_run = FALSE), "retired 4 files to")
+})
+
+test_that("the count in the closing line is singular when it should be", {
+  dir <- local_swept_dir(c("main_v1_2026-08-21.qmd", "main_v2_2026-08-22.qmd"))
+
+  # Reads as prose or it does not get read at all
+  expect_output(retire(dir, dry_run = FALSE), "retired 1 file to")
+})
+
+test_that("nothing to retire says so, and creates no old/", {
+  dir <- local_swept_dir("main_v1_2026-08-21.qmd")
+
+  expect_output(retire(dir, dry_run = FALSE), "nothing to retire in")
+  expect_false(dir.exists(file.path(dir, "old")))
+})
+
+# --- retire(): never overwriting --------------------------------------------
+
+test_that("a name already taken in old/ is skipped, not clobbered", {
+  dir <- local_swept_dir(swept_files, dirs = "old")
+  file.create(file.path(dir, "old", "main_v1_2026-08-21.qmd"))
+
+  expect_warning(
+    quietly(retire(dir, dry_run = FALSE)),
+    "skipped: main_v1_2026-08-21[.]qmd"
+  )
+
+  expect_true(file.exists(file.path(dir, "main_v1_2026-08-21.qmd")))
+})
+
+test_that("a collision does not stop the rest of the sweep", {
+  dir <- local_swept_dir(swept_files, dirs = "old")
+  file.create(file.path(dir, "old", "main_v1_2026-08-21.qmd"))
+
+  suppressWarnings(quietly(retire(dir, dry_run = FALSE)))
+
+  # Everything except the collided file still moved
+  expect_true(file.exists(file.path(dir, "old", "main_v2_2026-08-23.qmd")))
+  expect_true(file.exists(file.path(dir, "old", "figure_1a_2026-08-24.png")))
+})
+
+test_that("a collision shows on the dry run, before anything moves", {
+  dir <- local_swept_dir(swept_files, dirs = "old")
+  file.create(file.path(dir, "old", "main_v1_2026-08-21.qmd"))
+
+  plan <- suppressWarnings(quietly(retire(dir)))
+
+  expect_identical(
+    basename(plan$path[plan$action == "skipped"]),
+    "main_v1_2026-08-21.qmd"
+  )
+})
+
+# --- retire(): non-participation --------------------------------------------
+
+test_that("a near-miss name is left alone and reported as ignored", {
+  dir <- local_swept_dir(swept_files)
+
+  plan <- quietly(retire(dir, dry_run = FALSE))
+
+  # An underscore in the date: strict matching means it is never reinterpreted
+  expect_true(file.exists(file.path(dir, "figure_1a_2026_08-22.png")))
+  expect_identical(
+    plan$action[basename(plan$path) == "figure_1a_2026_08-22.png"],
+    "ignored"
+  )
+})
+
+test_that("an undated file never participates", {
+  dir  <- local_swept_dir(swept_files)
+  plan <- quietly(retire(dir, dry_run = FALSE))
+
+  expect_true(file.exists(file.path(dir, "notes.txt")))
+  expect_identical(
+    plan$action[basename(plan$path) == "notes.txt"],
+    "ignored"
+  )
+})
+
+test_that("a directory named like a dated file is never moved", {
+  dir <- local_swept_dir(
+    c("analysis_v1_2026-08-21.qmd", "analysis_v2_2026-08-22.qmd"),
+    dirs = "analysis_2026-08-23.old"
+  )
+
+  plan <- quietly(retire(dir, dry_run = FALSE))
+
+  expect_true(dir.exists(file.path(dir, "analysis_2026-08-23.old")))
+  expect_identical(
+    plan$action[basename(plan$path) == "analysis_2026-08-23.old"],
+    "ignored"
+  )
+})
+
+test_that("old/ does not sweep itself", {
+  dir <- local_swept_dir(swept_files)
+
+  quietly(retire(dir, dry_run = FALSE))
+  quietly(retire(dir, dry_run = FALSE))
+
+  expect_false(dir.exists(file.path(dir, "old", "old")))
+})
+
+# --- retire(): the plan -----------------------------------------------------
+
+test_that("the plan accounts for every entry in the directory, exactly once", {
+  dir  <- local_swept_dir(swept_files, dirs = "analysis_2026-08-23.old")
+  plan <- quietly(retire(dir))
+
+  expect_identical(sort(basename(plan$path)), sort(list.files(dir)))
+})
+
+test_that("the plan is returned invisibly", {
+  dir <- local_swept_dir(swept_files)
+
+  capture.output(returned <- withVisible(retire(dir)))
+
+  expect_false(returned$visible)
+  expect_s3_class(returned$value, "data.frame")
+})
+
+test_that("the plan carries the fields it sorted on", {
+  dir  <- local_swept_dir(swept_files)
+  plan <- quietly(retire(dir))
+
+  row <- plan[basename(plan$path) == "figure_1b_2026-08-23_14-30-00.png", ]
+
+  expect_identical(row$stem, "figure_1b")
+  expect_identical(row$ext, "png")
+  expect_identical(row$date, as.Date("2026-08-23"))
+  expect_identical(row$time, "14-30-00")
+  expect_true(is.na(row$version))
+})
+
+test_that("an ignored row carries no parsed fields", {
+  dir  <- local_swept_dir(swept_files)
+  plan <- quietly(retire(dir))
+
+  row <- plan[basename(plan$path) == "notes.txt", ]
+
+  # Nothing was weighed, so nothing is reported as having been weighed
+  expect_true(is.na(row$stem))
+  expect_true(is.na(row$ext))
+  expect_true(is.na(row$date))
+})
+
+test_that("destination is filled on retire rows and nowhere else", {
+  dir  <- local_swept_dir(swept_files)
+  plan <- quietly(retire(dir))
+
+  expect_false(any(is.na(plan$destination[plan$action == "retire"])))
+  expect_true(all(is.na(plan$destination[plan$action != "retire"])))
+})
+
+test_that("an empty directory gives an empty plan, not an error", {
+  dir <- local_swept_dir()
+
+  plan <- quietly(retire(dir))
+
+  expect_identical(nrow(plan), 0L)
+})
+
+# --- retire(): input validation ---------------------------------------------
+
+test_that("invalid path is rejected", {
+  expect_error(retire(c(".", ".")), "path must be length 1")
+  expect_error(retire(1), "path must be character")
+  expect_error(retire(NA_character_), "path must not be NA")
+  expect_error(
+    retire(file.path(tempdir(), "no-such-directory")),
+    "path must be an existing directory"
+  )
+})
+
+test_that("invalid dry_run is rejected", {
+  dir <- local_swept_dir(swept_files)
+
+  expect_error(retire(dir, dry_run = c(TRUE, TRUE)), "dry_run must be length 1")
+  expect_error(retire(dir, dry_run = "yes"), "dry_run must be TRUE or FALSE")
+  expect_error(retire(dir, dry_run = NA), "dry_run must be TRUE or FALSE")
+})
+
+test_that("nothing is moved when validation fails", {
+  dir <- local_swept_dir(swept_files)
+
+  expect_error(retire(dir, dry_run = "yes"))
+
+  expect_identical(sort(list.files(dir)), sort(swept_files))
+  expect_false(dir.exists(file.path(dir, "old")))
+})

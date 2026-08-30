@@ -1,16 +1,43 @@
 # retire() — sweep superseded dated/versioned files to old/
 
-**Status:** **READY — design settled 2026-08-30.** Ordering, grouping,
-scope, reporting, mechanics and the name are all decided in the sections
-below; no open questions remain, so implementation can start.
+**Status:** **SHIPPED 2026-08-30** as `retire()` in R/paths.R, with tests
+in tests/testthat/test-paths.R. Designed and implemented the same day; the
+sections below are the decisions as taken, kept for the reasoning.
+~~READY — design settled 2026-08-30~~
 ~~design discussion needed (ordering rule + scope)~~ ~~grammar must be
 settled jointly with dated-path~~ ~~Grammar now pinned by qmd-creator~~
 **Grammar shipped with `new_main()` (2026-08-23)** — see "Shared parser"
 below.
-**Proposed file:** R/paths.R family (shares the filename grammar)
+**Shipped in:** R/paths.R, beside dated_path() and the parser (shares the
+filename grammar)
 **Depends on:** nothing outstanding. The parser this file planned to share
 already exists: internal `parse_dated_filename()` in R/paths.R, with the
 exhaustive grammar tests in tests/testthat/test-paths.R.
+
+## As shipped (2026-08-30)
+
+Implemented as designed; every decision below held up. Four things the
+design did not cover, settled at implementation and recorded here rather
+than left to be read out of the code:
+
+1. **The plan comes back in plan order**, not directory order:
+   participants first, grouped and sorted newest-first within each group,
+   then the `ignored` rows. The frame reads the way the plan prints.
+2. **Output pluralizes** — `retired 1 file`, `retired 4 files`. Pinned by
+   a test, because it is exactly the kind of thing that regresses
+   unnoticed.
+3. **A rename that fails for a reason other than a collision warns**, over
+   and above the count in the closing line that the design named as the
+   signal for it. Silence on a failed move was not worth the terseness.
+4. **A sweep with nothing movable prints `nothing to retire in <path>` and
+   returns early**, so a dry run in which every candidate collides shows
+   that line plus the skip warning rather than a plan made entirely of
+   skips. The warning carries the information; a plan of things that will
+   not happen does not.
+
+One implementation note worth keeping: group boundaries are detected on
+the sorted stem and extension vectors rather than by pasting a grouping
+key, so no separator character has to be assumed absent from a stem.
 
 ## Motivation
 

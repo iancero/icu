@@ -294,3 +294,253 @@ parse_dated_filename <- function(file_name) {
     stringsAsFactors = FALSE
   )
 }
+
+
+# --- Retiring superseded files ----------------------------------------------
+
+#' Sweep superseded dated files into old/
+#'
+#' Groups the dated files in a directory by stem and extension, keeps the most
+#' recent of each group where it is, and moves the rest into an `old/`
+#' subdirectory. Prints the plan and touches nothing unless `dry_run = FALSE`.
+#'
+#' @param path A single, non-`NA` character string naming an existing
+#'   directory: the directory to sweep. Defaults to the working directory.
+#' @param dry_run A single `TRUE`/`FALSE`: print the plan and move nothing.
+#'   Defaults to `TRUE`, so a bare `retire()` is always safe to type.
+#'
+#' @details
+#' This is the counterpart to [new_main()]'s write-only contract. Creating
+#' `main_v3` leaves `main_v2` where it is; `retire()` is the only thing that
+#' moves a file to `old/`, replicating by hand what git would otherwise do.
+#'
+#' Files are grouped by stem and extension, so `main.qmd` documents and
+#' `main.html` renders are separate groups and never compete. Only names that
+#' speak the dated-file grammar participate -- see [dated_path()] for the
+#' grammar itself. A name that does not parse is left exactly where it is and
+#' reported as `ignored`; so is a *directory*, even one whose name parses
+#' cleanly, which is why `old/` never sweeps itself.
+#'
+#' @section Which file survives:
+#' Within a group, the survivor is chosen on **version first, then date, then
+#' time**, and a missing segment sorts as older. So a versioned file always
+#' outranks an unversioned one, whatever the dates say:
+#'
+#' \preformatted{
+#'   figure_1a_v2_2026-08-23.png   <- keeps
+#'   figure_1a_2026-08-24.png      -> old/, despite being a day newer
+#' }
+#'
+#' That is deliberate. A version number is an explicit statement that one file
+#' supersedes another; a date only records when a file happened to be started.
+#' The consequence is worth knowing before you run this with `dry_run = FALSE`,
+#' which is why the plan reports the version, date and time it sorted on.
+#'
+#' @section Never overwriting:
+#' If a file's name is already taken in `old/` -- possible when something was
+#' restored and then re-retired -- that file is **skipped with a warning** and
+#' left in place. It is not clobbered, and it does not stop the rest of the
+#' sweep: one stale name should not hold routine housekeeping hostage, and a
+#' skipped file goes on warning about itself every run until it is dealt with.
+#'
+#' The check is made while the plan is built rather than during the move,
+#' because it cannot be delegated to [file.rename()]: on POSIX, `rename(2)`
+#' replaces an existing destination silently, so a successful rename is not
+#' evidence that nothing was overwritten.
+#'
+#' Collisions aside, the sweep is best-effort: a locked or unwritable file can
+#' still fail partway, and nothing is rolled back. That is what the count in
+#' the closing line is for.
+#'
+#' @return The plan, invisibly: a data frame with one row per entry in `path`
+#'   and the columns `path`, `stem`, `ext`, `version`, `date`, `time`,
+#'   `action`, `destination`. `action` is one of `"keep"`, `"retire"`,
+#'   `"skipped"` or `"ignored"`, and `destination` is `NA` except on `retire`
+#'   rows. The parsed fields are carried so that a surprising decision can be
+#'   read off the plan rather than reconstructed.
+#'
+#' @examples
+#' dir <- tempfile()
+#' dir.create(dir)
+#'
+#' file.create(file.path(dir, c(
+#'   'main_v1_2026-08-21.qmd',
+#'   'main_v2_2026-08-22.qmd',
+#'   'notes.txt'
+#' )))
+#'
+#' # Prints the plan, moves nothing
+#' retire(dir)
+#'
+#' # Do it for real
+#' plan <- retire(dir, dry_run = FALSE)
+#' plan$action
+#'
+#' list.files(dir)
+#' list.files(file.path(dir, 'old'))
+#'
+#' unlink(dir, recursive = TRUE)
+#'
+#' @export
+retire <- function(path = '.', dry_run = TRUE) {
+
+  stopifnot(
+    'path must be length 1'              = length(path) == 1,
+    'path must be character'             = is.character(path),
+    'path must not be NA'                = !is.na(path),
+    'path must be an existing directory' = dir.exists(path),
+    'dry_run must be length 1'           = length(dry_run) == 1,
+    'dry_run must be TRUE or FALSE'      = is.logical(dry_run) && !is.na(dry_run)
+  )
+
+  old_dir <- file.path(path, 'old')
+  full    <- file.path(path, list.files(path))
+  parsed  <- parse_dated_filename(full)
+
+  # Directories are excluded explicitly rather than left to the grammar. An
+  # extension is required to parse, but `analysis_2026-08-23.old` is a
+  # perfectly parseable *directory* name, and list.files() returns directories
+  # alongside files -- so without this, retire() would rename a folder. It is
+  # also what keeps old/ itself out of its own sweep.
+  participates <- parsed$parsed & !dir.exists(full)
+
+  plan <- data.frame(
+    path        = full,
+    stem        = parsed$stem,
+    ext         = parsed$ext,
+    version     = parsed$version,
+    date        = parsed$date,
+    time        = parsed$time,
+    action      = rep_len('ignored', length(full)),
+    destination = rep_len(NA_character_, length(full)),
+    stringsAsFactors = FALSE
+  )
+
+  # A file that does not participate carries no parsed fields, so an `ignored`
+  # row cannot be mistaken for one that was weighed and lost
+  plan$stem[!participates]    <- NA_character_
+  plan$ext[!participates]     <- NA_character_
+  plan$version[!participates] <- NA_integer_
+  plan$date[!participates]    <- as.Date(NA)
+  plan$time[!participates]    <- NA_character_
+
+  idx <- which(participates)
+
+  if (length(idx) > 0) {
+
+    # NA sorts as oldest in both optional segments: an unversioned file loses
+    # to any versioned one, and a timeless name loses to a stamped one. -1
+    # rather than 0, since `_v0` is a name the grammar accepts.
+    version_key <- ifelse(is.na(plan$version[idx]), -1L, plan$version[idx])
+    date_key    <- as.integer(plan$date[idx])
+    time_key    <- ifelse(is.na(plan$time[idx]), '', plan$time[idx])
+
+    # Grouped, then newest first within each group. Mixed sort directions
+    # alongside a character key need the radix method.
+    o <- order(
+      plan$stem[idx], plan$ext[idx], version_key, date_key, time_key,
+      decreasing = c(FALSE, FALSE, TRUE, TRUE, TRUE),
+      method     = 'radix'
+    )
+
+    ranked <- idx[o]
+    stems  <- plan$stem[ranked]
+    exts   <- plan$ext[ranked]
+
+    # The first row of each group is the survivor. Detecting the boundary on
+    # the sorted vectors avoids inventing a separator character to paste a
+    # grouping key out of -- a stem can contain anything.
+    n      <- length(ranked)
+    newest <- c(
+      TRUE,
+      stems[-1] != stems[-n] | exts[-1] != exts[-n]
+    )
+
+    plan$action[ranked] <- ifelse(newest, 'keep', 'retire')
+
+    # Participants in plan order, then the rest: the frame reads the way the
+    # plan prints, group by group
+    plan <- plan[c(ranked, setdiff(seq_len(nrow(plan)), ranked)), ]
+    row.names(plan) <- NULL
+  }
+
+  retiring <- which(plan$action == 'retire')
+
+  if (length(retiring) > 0) {
+    plan$destination[retiring] <- file.path(
+      old_dir, basename(plan$path[retiring])
+    )
+
+    # Never overwrite. This has to be an explicit check: on POSIX, rename(2)
+    # replaces an existing destination silently, so file.rename() coming back
+    # TRUE is not evidence that nothing was clobbered.
+    collides <- file.exists(plan$destination[retiring])
+
+    plan$action[retiring[collides]]      <- 'skipped'
+    plan$destination[retiring[collides]] <- NA_character_
+  }
+
+  skipped <- which(plan$action == 'skipped')
+
+  if (length(skipped) > 0) {
+    # Loud, and loud again on every subsequent run: a skipped file is work
+    # left undone, and the plan is not something anyone re-reads
+    warning(
+      'already in ', old_dir, ', skipped: ',
+      paste(basename(plan$path[skipped]), collapse = ', ')
+    )
+  }
+
+  moving <- which(plan$action == 'retire')
+
+  if (length(moving) == 0) {
+    cat('nothing to retire in ', path, '\n', sep = '')
+    return(invisible(plan))
+  }
+
+  if (dry_run) {
+    shown <- plan[plan$action != 'ignored', ]
+
+    cat('retire plan for ', path, '\n', sep = '')
+    cat(sprintf('  %-7s %s\n', shown$action, basename(shown$path)), sep = '')
+
+    ignored <- sum(plan$action == 'ignored')
+
+    if (ignored > 0) {
+      cat('  ', ignored, ' not recognized\n', sep = '')
+    }
+
+    cat(
+      'dry run: nothing moved; re-run with dry_run = FALSE to move ',
+      length(moving), if (length(moving) == 1) ' file' else ' files',
+      ' to ', old_dir, '\n',
+      sep = ''
+    )
+
+    return(invisible(plan))
+  }
+
+  # Only now, and never on a dry run: creating old/ is touching the directory
+  if (!dir.exists(old_dir)) {
+    dir.create(old_dir)
+  }
+
+  moved <- file.rename(plan$path[moving], plan$destination[moving])
+
+  if (!all(moved)) {
+    warning(
+      'could not move: ',
+      paste(basename(plan$path[moving][!moved]), collapse = ', ')
+    )
+  }
+
+  cat(
+    'retired ', sum(moved), if (sum(moved) == 1) ' file' else ' files',
+    ' to ', old_dir,
+    if (length(skipped) > 0) paste0(' (', length(skipped), ' skipped)'),
+    '\n',
+    sep = ''
+  )
+
+  invisible(plan)
+}

@@ -58,9 +58,8 @@ Implementation wave, in order. Steps 1 and 2 are done:
 anything else any more; what remains is independent, and none of it is a
 commitment.
 
-Independent, any time: **retire.md** (grammar now shipped, and the parser
-it planned to share already exists), **icu-setup.md** (now the only
-consumer of `icu.projects_dir`'s story — see the note above).
+Independent, any time: **icu-setup.md** (now the only consumer of
+`icu.projects_dir`'s story — see the note above).
 
 Deliberately backlog, not in the wave: **codebook-md.md**, then
 **synthetic-data.md** (downstream of codebook — consumes its schema, never
@@ -70,5 +69,6 @@ Shipped: dated-path (`dated_path()` + shorthands), round-cols-default
 (`digits = 3`), new-main (`new_main()` + internal `parse_dated_filename()`),
 meeting (`meeting()` + internal `meeting_block()`), conventions-md
 (`conventions_md()`), project-scaffold (`new_project()` + internal
-`projects_dir()`) — see done/. Superseded: qmd-creator.md was replaced wholesale by
+`projects_dir()`), retire (`retire()`, the grammar's second consumer) — see
+done/. Superseded: qmd-creator.md was replaced wholesale by
 new-main.md (2026-08-23) and is gone.
