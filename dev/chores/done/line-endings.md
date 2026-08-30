@@ -1,20 +1,20 @@
 # Normalize line endings to one convention
 
-**Status:** DONE 2026-08-24 — option A chosen and executed (commit 27d1463).
+**Status:** DONE 2026-08-30 — option A chosen and executed (commit 27d1463).
 Everything from "Motivation" down is the original analysis, kept as written.
 **Scope:** whole repo; adds a `.gitattributes`. No package code changes, no
 history rewriting.
 **Raised:** 2026-08-23, while shipping `new_main()`.
 
-## As done (2026-08-24)
+## As done (2026-08-30)
 
 Option **A**: a `.gitattributes` carrying `* text=auto eol=lf`. Five notes
 for anyone reading this later, because the steps as written needed three
 corrections.
 
 1. **It was drifting, not stable.** Re-measured at execution time: 27
-   `w/lf` / 25 `w/crlf`, against 21/15 when this was raised the day
-   before. Files that were LF then were CRLF by then — `R/paths.R`,
+   `w/lf` / 25 `w/crlf`, against 21/15 when this was raised a week
+   earlier. Files that were LF then were CRLF by then — `R/paths.R`,
    `tests/testthat/test-paths.R`, `NAMESPACE`, two `man/*.Rd`. The
    mechanism is git itself: with `core.autocrlf=true` and no
    `.gitattributes`, every checkout writes CRLF while shell tooling

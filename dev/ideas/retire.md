@@ -1,6 +1,6 @@
 # retire() — sweep superseded dated/versioned files to old/
 
-**Status:** **READY — design settled 2026-08-25.** Ordering, grouping,
+**Status:** **READY — design settled 2026-08-30.** Ordering, grouping,
 scope, reporting, mechanics and the name are all decided in the sections
 below; no open questions remain, so implementation can start.
 ~~design discussion needed (ordering rule + scope)~~ ~~grammar must be
@@ -67,10 +67,10 @@ The exhaustive grammar tests live with the parser, in
 tests/testthat/test-paths.R. Keep retire()'s own tests focused on grouping,
 ordering, and moving.
 
-## Ordering rule (DECIDED 2026-08-25)
+## Ordering rule (DECIDED 2026-08-30)
 
 Within a group, newest wins and everything else goes to `old/`. Four
-decisions, taken with Ian on 2026-08-25.
+decisions, taken with Ian on 2026-08-30.
 
 1. **Version outranks date. Date breaks ties within a version; time breaks
    ties within a date. Unversioned files sort as oldest.**
@@ -133,15 +133,15 @@ decisions, taken with Ian on 2026-08-25.
 
 Files that don't parse under the grammar are ignored (left in place) and
 appear in the plan as `action = "ignored"`, summarized in the printed
-output as a count (decided 2026-08-25). Real folders will contain
+output as a count (decided 2026-08-30). Real folders will contain
 near-misses — e.g. `figure_1a_2026_08-22.png` (underscore in the date)
 from the motivating example itself. Strict matching means a malformed
 name is left alone, never "helpfully" retired. Undated files
 (`main.qmd`) likewise never participate.
 
-## Scope, reporting, and mechanics (DECIDED 2026-08-25)
+## Scope, reporting, and mechanics (DECIDED 2026-08-30)
 
-Taken with Ian on 2026-08-25, in the same pass as the ordering rule.
+Taken with Ian on 2026-08-30, in the same pass as the ordering rule.
 
 **Scope: one directory, non-recursive.** `retire(path = '.')` sweeps that
 directory only, and each retired file moves to `old/` *inside it*
@@ -249,7 +249,7 @@ filesystem, and a copy-and-unlink fallback is never needed.
 - **Idempotent:** running again immediately after a sweep is a no-op.
 - **Never overwrite:** if a target name already exists in `old/` (possible
   if a file was restored and re-retired), that file is **skipped, with a
-  warning** — never clobbered. Decided 2026-08-25, revising this file's
+  warning** — never clobbered. Decided 2026-08-30, revising this file's
   original "error loudly".
 
   The collision is detected while the **plan is built**, not discovered
@@ -277,7 +277,7 @@ filesystem, and a copy-and-unlink fallback is never needed.
   third of five moves, and rolling back the first two is more machinery
   than this deserves. That is the other reason a real run prints a count.
 
-## Name (CHECKED 2026-08-25)
+## Name (CHECKED 2026-08-30)
 
 No clash. All 295 packages installed under R 4.6.1 were scanned for an
 exported `retire`: none has one, and nothing named `retire` sits on the
@@ -285,7 +285,7 @@ default search path. Old open question 5 is closed.
 
 ## Open questions
 
-**None.** Everything in this file was decided on 2026-08-25 — ordering,
+**None.** Everything in this file was decided on 2026-08-30 — ordering,
 grouping, scope, reporting, mechanics, and the name check — so the status
 gate is open and implementation can start.
 
