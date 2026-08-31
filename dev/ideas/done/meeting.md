@@ -81,8 +81,16 @@ outstanding, what's settled).
 - Sections are Attendees / Notes / Requests only. Decisions was considered
   and folded into Notes (per Ian: "Decisions is really just Notes to me").
   Deliverables folded into Requests — in practice they're the same checklist.
+  **Superseded 2026-08-31** by dev/chores/done/meeting-block-revision.md:
+  the third section is now `**TODOs / Deliverables:**`, deliberately
+  unfolding the second half. Decisions stays folded into Notes. Still three
+  sections.
 - Requests are `- [ ]` checkboxes: ticked as work completes between
-  meetings, so file-top always shows outstanding work.
+  meetings, so file-top always shows outstanding work. **Superseded
+  2026-08-31**: four checkboxes rather than two, and Attendees is now a
+  list with Ian prefilled plus two blank bullets. The block below is the
+  original shipped one, not the current output — see the chore for the
+  current block.
 
 ### Mechanics
 

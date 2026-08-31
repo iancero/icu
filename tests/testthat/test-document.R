@@ -434,14 +434,18 @@ test_that("the block is exactly the house boilerplate", {
     paste0(
       "## Meeting - ", today, "\n",
       "\n",
-      "**Attendees:** \n",
+      "**Attendees:**\n",
+      "- Ian Cero\n",
+      "- \n",
+      "- \n",
+      "\n",
       "\n",
       "**Notes:**\n",
       "\n",
       "\n",
-      "\n",
-      "**Requests:**\n",
-      "\n",
+      "**TODOs / Deliverables:**\n",
+      "- [ ] \n",
+      "- [ ] \n",
       "- [ ] \n",
       "- [ ] \n"
     )
@@ -478,35 +482,50 @@ test_that("the block carries three sections, in order", {
 
   expect_identical(
     grep("^\\*\\*", lines, value = TRUE),
-    c("**Attendees:** ", "**Notes:**", "**Requests:**")
+    c("**Attendees:**", "**Notes:**", "**TODOs / Deliverables:**")
   )
 })
 
-test_that("Decisions and Deliverables are deliberately absent", {
-  # Decisions folded into Notes, Deliverables into Requests -- pinned so the
-  # folding is not quietly undone
+test_that("Decisions are deliberately absent", {
+  # Decisions folded into Notes -- pinned so the folding is not quietly
+  # undone. Deliverables used to be folded into Requests the same way and
+  # pinned here beside it; that half was deliberately unfolded on
+  # 2026-08-25, when the section became TODOs / Deliverables.
   block <- meeting_block()
 
   expect_no_match(block, "Decisions")
-  expect_no_match(block, "Deliverables")
 })
 
-test_that("requests are two empty, unticked checkboxes", {
+test_that("TODOs are four empty, unticked checkboxes", {
   lines <- strsplit(meeting_block(), "\n")[[1]]
 
   # Checkboxes rather than bullets: they carry state, so the top of the
-  # document always shows what is still outstanding
-  expect_identical(grep("^- \\[", lines, value = TRUE), c("- [ ] ", "- [ ] "))
+  # document always shows what is still outstanding. Four of them is a hint
+  # about how much usually comes out of a meeting.
+  expect_identical(
+    grep("^- \\[", lines, value = TRUE),
+    c("- [ ] ", "- [ ] ", "- [ ] ", "- [ ] ")
+  )
   expect_no_match(meeting_block(), "[x]", fixed = TRUE)
+})
+
+test_that("attendees are Ian plus two empty bullets", {
+  lines <- strsplit(meeting_block(), "\n")[[1]]
+
+  # Ian is at every meeting this function will ever be called for, so he is
+  # prefilled; the empty bullets carry the cursor-placing trailing space
+  attendees <- which(lines == "**Attendees:**")
+  expect_identical(lines[(attendees + 1):(attendees + 3)],
+                   c("- Ian Cero", "- ", "- "))
 })
 
 test_that("there is room to type under Notes", {
   lines <- strsplit(meeting_block(), "\n")[[1]]
 
-  notes    <- which(lines == "**Notes:**")
-  requests <- which(lines == "**Requests:**")
+  notes <- which(lines == "**Notes:**")
+  todos <- which(lines == "**TODOs / Deliverables:**")
 
-  expect_identical(lines[(notes + 1):(requests - 1)], c("", "", ""))
+  expect_identical(lines[(notes + 1):(todos - 1)], c("", ""))
 })
 
 test_that("the block ends with a newline", {

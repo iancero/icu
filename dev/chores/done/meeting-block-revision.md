@@ -1,7 +1,14 @@
 # Fill out meeting()'s block
 
-**Status:** ready — Ian specified the target block exactly (below). No
-design discussion needed on *what* it says.
+**Status:** DONE 2026-08-31 — implemented as specified, with all three
+open questions resolved on their recorded leans (Ian, 2026-08-31):
+checkbox lines **keep** the trailing space, the third label **gains** the
+colon (`**TODOs / Deliverables:**`), and the gap under Notes is **two**
+blank lines. `document()` + `test()` clean: 454 passing, 0 failures.
+Step 5 was done as the narrow rename fix only — the two stale sentences in
+`inst/templates/conventions.md` now read TODOs rather than requests. That
+edit is independent of [conventions-content.md](conventions-content.md),
+which decides what belongs in that file at all; it goes stale either way.
 **Caution:** this changes an **exported function's output**, reverses a
 decision that is documented and test-pinned, and breaks five named tests
 by design. Read the Testing notes before editing anything.

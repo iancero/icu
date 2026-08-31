@@ -18,8 +18,8 @@ visible return would print it a second time.
 }
 \description{
 Writes the house meeting-log block -- date-stamped header, Attendees,
-Notes, and a Requests checklist -- into the current document at the
-cursor, ready to type into while the meeting is happening.
+Notes, and a TODOs / Deliverables checklist -- into the current document
+at the cursor, ready to type into while the meeting is happening.
 }
 \details{
 The block is:
@@ -27,13 +27,17 @@ The block is:
 \preformatted{## Meeting - 2026-08-23
 
 **Attendees:**
+- Ian Cero
+-
+-
+
 
 **Notes:**
 
 
-
-**Requests:**
-
+**TODOs / Deliverables:**
+- [ ]
+- [ ]
 - [ ]
 - [ ]
 }
@@ -47,13 +51,21 @@ the output that came out of that meeting sort and grep together. The
 fill-in lines carry a trailing space, which is where the cursor wants to
 be.
 
-Only three sections, deliberately. Decisions folded into Notes, because
-in practice a decision is just a note worth writing down. Deliverables
-folded into Requests, because they are the same checklist seen from two
-sides. The requests are checkboxes rather than bullets, so they carry
-state: tick them as the work lands, and the top of the document always
-shows what is still outstanding -- which is also what makes the log
-usable as project memory, by you or by an AI session reading the source.
+Only three sections, deliberately. Decisions are folded into Notes,
+because in practice a decision is just a note worth writing down.
+Deliverables are \emph{not} folded away, though: they and TODOs are the same
+checklist seen from two sides, and naming both is what reminds you to
+capture both. Those lines are checkboxes rather than bullets, so they
+carry state: tick them as the work lands, and the top of the document
+always shows what is still outstanding -- which is also what makes the
+log usable as project memory, by you or by an AI session reading the
+source.
+
+Ian is prefilled as an attendee, since he is at every meeting this
+function will ever be called for. The empty attendee and checkbox lines
+are a hint about how much usually comes out of a meeting; unused ones
+are cheap to delete, and adding a row is one keystroke, which is why
+neither count is an argument.
 }
 \section{Where it lands}{
 

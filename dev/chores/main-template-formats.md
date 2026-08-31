@@ -144,6 +144,8 @@ Nothing else in the suite reads the YAML.
 - [conventions-content.md](conventions-content.md) — the open chore on
   what `conventions.md` should say. Item (4) edits the same paragraphs;
   if both are worked, do them together rather than twice.
-- [meeting-block-revision.md](meeting-block-revision.md) — the other open
-  revision to a shipped document artifact. Independent of this one; they
-  touch different files and can land in either order.
+- [done/meeting-block-revision.md](done/meeting-block-revision.md) — was
+  the other open revision to a shipped document artifact; **landed
+  2026-08-31**. Independent of this one; they touched different files.
+  Note it already made the narrow rename fix to `conventions.md`'s two
+  meeting sentences, so item (4) here has that much less to do.

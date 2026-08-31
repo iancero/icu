@@ -29,10 +29,10 @@ the project's memory. It carries, in order: Project Background (the meeting
 log), Data Provenance, Data Wrangling, Analysis, Results Summary.
 
 - Start each meeting by putting the cursor at the end of the log and
-  calling `meeting()`. Attendees, notes, and requests get typed as the
+  calling `meeting()`. Attendees, notes, and TODOs get typed as the
   colleague talks.
-- Requests are checkboxes. Tick them as the work lands, so the top of the
-  document always shows what is outstanding.
+- TODOs and deliverables are checkboxes. Tick them as the work lands, so
+  the top of the document always shows what is outstanding.
 - Analysis sections cite the meeting that asked for them.
 - Render once at the end of a work stretch. The setup chunk's hook appends
   a session-info record, so the rendered file states which package
